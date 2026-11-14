@@ -49,7 +49,13 @@ mvn -B clean package
 - `execute if block` 实测柱体结构：113 可疑砂 / 112 SAND / 111 STONE 底座 / 114 清空 AIR / 邻格柱一致
 - 残留物：测试用 scoreboard `digchk` 已删；测试遗址留在场上可直接进服刷挖体验
 
-## 五、维护纪律（继承铸剑项目经验）
+## 五、真机验证（e2e bot）
+
+`tools/e2e-backup.js`（运行副本在 ForgingMaster-Lore/tools/guitest，连 `DIGSITE_PORT` 指定端口）：
+**16/16 PASS** —— 刷挖 300 交互 → 6 文物碎片 PDC 识别 → 修复台拼图 → 无损修复公告 → 建馆 → 捐献展台陈列 → 成就触发（藏而好施）→ 图鉴 GUI → 统计/纪录墙。
+专属测试服：`testserver/`（paper 1.21.10，端口 25577，RCON 25576/`digsite-test`，在线模式关）。
+
+## 六、维护纪律（继承铸剑项目经验）
 
 1. 新存档一律走 `util.YamlIo`，裸 `yml.save` 不许出现
 2. 命令三处同源：`SUBCOMMANDS` Tab 表 + `helpLines()` + `onCommand` 分派，漏一处自检红
@@ -59,5 +65,6 @@ mvn -B clean package
 
 | 版本 | 一句话 |
 | --- | --- |
+| **0.2.0b** | 真机 e2e 修 2 条 P1：RestoreMenu 会话在 openInventory 触发的 onClose 中被清（拼图页点击全失效）；Paper 对 cancelled 点击事后重发原槽内容压制增量渲染（指派改整窗重开 + 保留已指派） |
 | **0.2.0** | P2 双轨拓展：**D 遗址纵深**（沉船遗骸/冰封祭坛新档位 + 冰壳通用机制 + 盗墓贼夜袭 + 传说遗物全服 BossBar）+ **E 修复·馆藏·成就**（精修钳/粘合剂套件 + 12 条成就 `/digs achieve` GUI + 参观计数 + 拓片纪念品不可再捐）+ 自检 78→108 条 |
 | **0.1.0** | 首版：遗址三档生成 + 挖掘状态机 + 修复拼图 + 博物馆 + 图鉴/投票 + 78 断言自检，真机全绿 |

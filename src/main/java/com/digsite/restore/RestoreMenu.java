@@ -130,12 +130,12 @@ public final class RestoreMenu implements InventoryHolder, Listener {
             Msg.send(p, "<red>未知文物，无法拼图。</red>");
             return;
         }
-        Session s = sessions.computeIfAbsent(p.getUniqueId(), k -> new Session());
-        s.artifactId = artifactId;
-        s.assigned.clear();
-
+        // 重开窗口时保留同文物的既有指派（整窗重开是唯一可靠的客户端同步方式）
+        java.util.Map<Integer, Model.FragmentData> keep = new HashMap<>();
+        Session pre = sessions.get(p.getUniqueId());
+        if (pre != null && artifactId.equals(pre.artifactId)) keep.putAll(pre.assigned);
         Inventory inv = Bukkit.createInventory(this, 54,
-                Msg.mm("<dark_green>修复台 · " + def.name() + " <gray>(" + s.assigned.size() + "/"
+                Msg.mm("<dark_green>修复台 · " + def.name() + " <gray>(" + keep.size() + "/"
                         + def.pieces() + " 片就位)</gray></dark_green>"));
         view = inv;
 
@@ -166,12 +166,21 @@ public final class RestoreMenu implements InventoryHolder, Listener {
 
         // 底部：45 返回 / 49 修复 / 53 信息（占位，渲染时更新）
         inv.setItem(45, navItem(Material.ARROW, "<yellow>◀ 返回选择</yellow>"));
-        inv.setItem(49, repairButton(def, s));
+        inv.setItem(49, repairButton(def, new Session())); // 未指派态占位，开窗后 renderAssemble 会重设
         inv.setItem(53, infoItem("<gray>点碎片 → 指派到对应 piece 槽位；点已就位槽位 = 换回</gray>"));
 
-        // 渲染碎片按钮 lore 里的指派态
-        renderAssemble(p);
+        // 先开窗：openInventory 触发上一界面的 InventoryCloseEvent 清掉旧会话，
+        // 会话/拼图 keys 必须在开窗之后再建，否则拼图页点击全部失效（真机 e2e 实测教训）
         p.openInventory(inv);
+
+        Session s = sessions.computeIfAbsent(p.getUniqueId(), k -> new Session());
+        s.artifactId = artifactId;
+        s.assigned.clear();
+        s.assigned.putAll(keep);
+        assembleKeys.put(p.getUniqueId(), keys); // 顺序先存，槽位渲染再查
+
+        // 渲染碎片按钮 lore 里的指派态（此时窗口已打开，renderAssemble 取到的才是新窗口）
+        renderAssemble(p);
     }
 
     /** 拼图页槽位 → 聚合 key 列表（随每次 openAssemble 刷新）。 */
@@ -181,6 +190,8 @@ public final class RestoreMenu implements InventoryHolder, Listener {
     private void renderAssemble(Player p) {
         Session s = sessions.get(p.getUniqueId());
         Inventory inv = p.getOpenInventory().getTopInventory();
+        plugin.getLogger().info("[DBG2] render session=" + (s == null ? "null" : s.artifactId + "/" + s.assigned.size())
+                + " invHolder=" + (inv.getHolder() == null ? "null" : inv.getHolder().getClass().getSimpleName()));
         if (s == null || !(inv.getHolder() instanceof RestoreMenu)) return;
         Model.ArtifactDef def = plugin.catalog().byId(s.artifactId);
         if (def == null) return;
@@ -206,14 +217,15 @@ public final class RestoreMenu implements InventoryHolder, Listener {
                 int piece = Integer.parseInt(key.substring(0, key.indexOf('/')));
                 Model.FragmentData fd = scanValuesByKey(scan, key);
                 if (fd == null) continue; // 碎片在菜单打开期间消失，跳过该组
-                inv.setItem(9 + i, fragmentButton(fd, counts.getOrDefault(key, 0), def,
-                        fd.equals(s.assigned.get(piece))));
+                boolean marked = fd.equals(s.assigned.get(piece));
+                inv.setItem(9 + i, fragmentButton(fd, counts.getOrDefault(key, 0), def, marked));
             }
         }
         // 更新标题中的就位数
         inv.setItem(53, infoItem("<gray>已就位 </gray><yellow>" + s.assigned.size() + "</yellow><gray>/</gray><white>"
                 + def.pieces() + "</white><gray> 片；点碎片 → 指派；点已就位槽位 = 换回</gray>"));
     }
+
 
     private Model.FragmentData scanValuesByKey(Map<Integer, Model.FragmentData> scan, String key) {
         for (Model.FragmentData fd : scan.values()) {
@@ -325,7 +337,7 @@ public final class RestoreMenu implements InventoryHolder, Listener {
 
             if (slot < slotCount) {
                 // 点 piece 槽位：已就位 → 换回
-                if (s.assigned.remove(slot) != null) renderAssemble(p);
+                if (s.assigned.remove(slot) != null) openAssemble(p, s.artifactId);
                 return;
             }
             if (slot >= 9 && slot <= 35) {
@@ -336,7 +348,7 @@ public final class RestoreMenu implements InventoryHolder, Listener {
                 if (fd == null) return;
                 // 指派（同 piece 重复点击 = 换成新碎片；其他 piece 不受影响）
                 s.assigned.put(fd.piece(), fd);
-                renderAssemble(p);
+                openAssemble(p, s.artifactId); // 整窗重开同步（增量 setItem 会被 Paper 的 cancel 重发覆盖）
                 return;
             }
             if (slot == 45) { // 返回选择页
