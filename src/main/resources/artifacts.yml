@@ -1,0 +1,103 @@
+# 文物目录 —— id 唯一，pieces 与碎片槽位数一致
+# rarity: common | rare | epic | legendary
+# display: 展示用原版物品材质（成品文物以它为基础）
+# weight: 修复/图鉴展示排序权重（大靠前），loot 权重走 rarity
+artifacts:
+  - id: bone_flute
+    name: 骨笛
+    rarity: common
+    pieces: 4
+    display: BONE
+    weight: 40
+    lore:
+      - "<gray>远古部落的音律，吹响时风声呜咽。</gray>"
+  - id: clay_head
+    name: 陶俑首
+    rarity: common
+    pieces: 2
+    display: CLAY_BRICK
+    weight: 40
+    lore:
+      - "<gray>陶俑的头颅，眉眼间还留着匠人的指纹。</gray>"
+  - id: bamboo_slips
+    name: 竹简
+    rarity: common
+    pieces: 5
+    display: BAMBOO_MOSAIC
+    weight: 35
+    lore:
+      - "<gray>墨迹斑驳的简册，记着一场 forgotten 的旱灾。</gray>"
+  - id: jade_bi
+    name: 玉璧
+    rarity: rare
+    pieces: 3
+    display: LIME_STAINED_GLASS
+    weight: 30
+    lore:
+      - "<gray>苍璧礼天，边缘的谷纹细如发丝。</gray>"
+  - id: oracle_bone
+    name: 甲骨残片
+    rarity: rare
+    pieces: 4
+    display: BONE_BLOCK
+    weight: 28
+    lore:
+      - "<gray>灼裂的龟甲，卜辞问的是明年雨水。</gray>"
+  - id: seal_stamp
+    name: 玺印
+    rarity: rare
+    pieces: 3
+    display: GOLD_NUGGET
+    weight: 26
+    lore:
+      - "<gray>印钮是一头伏兽，印文无人能识。</gray>"
+  - id: bronze_jue
+    name: 青铜爵
+    rarity: epic
+    pieces: 4
+    display: COPPER_INGOT
+    weight: 20
+    lore:
+      - "<gray>三足两柱，绿锈之下是三千年前的酒气。</gray>"
+  - id: tricolor_horse
+    name: 唐三彩马
+    rarity: epic
+    pieces: 6
+    display: TERRACOTTA
+    weight: 16
+    lore:
+      - "<gray>釉色流淌的黄鬃骏马，鞍上还系着丝绦。</gray>"
+  - id: blue_porcelain
+    name: 青花瓷瓶
+    rarity: epic
+    pieces: 5
+    display: LIGHT_BLUE_STAINED_GLASS
+    weight: 14
+    lore:
+      - "<gray>缠枝莲纹绕瓶一周，口沿有一道旧锔钉。</gray>"
+  - id: gilded_statue
+    name: 鎏金铜像
+    rarity: legendary
+    pieces: 7
+    display: GOLD_BLOCK
+    weight: 8
+    lore:
+      - "<gray>金皮斑驳的造像，底座铭文指向一座未见的城。</gray>"
+
+# 遗址档位 → rarity 掉落权重（SiteService 每层完成时 roll 用）
+site-tier-weights:
+  pit:        # 小型灰坑
+    common: 85
+    rare: 15
+    epic: 0
+    legendary: 0
+  tomb:       # 贵族墓
+    common: 45
+    rare: 45
+    epic: 10
+    legendary: 0
+  palace:     # 宫殿基址
+    common: 20
+    rare: 40
+    epic: 32
+    legendary: 8

@@ -1,0 +1,33 @@
+# 考古博物馆 · DigSite 配置
+config-version: 1
+
+general:
+  # 公告前缀（MiniMessage）
+  prefix: "<gray>[</gray><gradient:#c98f2d:#7a4d17>考古</gradient><gray>]</gray> "
+
+sites:
+  max-active: 3                # 全服同时存在遗址上限
+  spawn-interval-minutes: 120  # 自动落遗址间隔（分钟）
+  min-distance-between: 400    # 遗址之间最小距离（格）
+  min-distance-from-spawn: 300 # 距世界出生点最小距离（格）
+  brush-cooldown-ticks: 15     # 同格刷挖安全间隔（低于则判定手速过快）
+  hasty-damage: 8              # 手速过快对格子 integrity 的损伤
+  hits-per-layer: 6            # 每层需要刷挖次数
+  expire-days: 14              # 遗址未清空时的存留天数（0 = 永不）
+  spawn-attempts: 24           # 随机落点尝试次数
+
+museum:
+  max-halls: 6                 # 分馆上限
+  pedestals-per-hall: 12       # 每馆展台数（环形）
+  pedestal-radius: 5           # 展台环半径
+  vote-period-days: 7          # 镇馆之宝投票周期（天）
+  announce-epic-plus: true     # epic 及以上事件全服公告
+
+restore:
+  min-integrity: 10            # 碎片成色下限
+  perfect-degree: 95           # 无损成色阈值
+  broken-degree: 60            # 完整/残缺分界
+  full-set-bonus: 5            # 全片齐额外修复度奖励
+
+announce:
+  throttle-seconds: 3          # 公告队列节流（秒）

@@ -1,0 +1,15 @@
+name: DigSite
+version: "${project.version}"
+main: com.digsite.DigSitePlugin
+api-version: "1.21"
+author: digsite
+description: 考古博物馆 —— 遗址挖掘 / 碎片修复 / 博物馆陈列 / 图鉴纪录
+commands:
+  digs:
+    description: 考古主命令
+    usage: /digs help
+    aliases: [digsite, kaogu]
+permissions:
+  digs.admin:
+    description: 考古管理员权限
+    default: op

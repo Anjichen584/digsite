@@ -1,0 +1,26 @@
+# 考古博物馆 · DigSite 遗址档位模板（B 部分加载）
+# size 必须为奇数（保证有中心格）；layers 为每格挖掘层数；
+# top-block 建议用 SUSPICIOUS_SAND / SUSPICIOUS_GRAVEL（原版可疑方块，刷子可交互）；
+# fill-block 为下层垫层（SAND/GRAVEL）；底座固定 STONE，柱顶上方自动清空 3 格。
+tiers:
+  pit:
+    display-name: 小型灰坑
+    description: 先民丢弃弃物的土坑，浅浅两层，最适合新手考古队。
+    size: 5
+    layers: 2
+    top-block: SUSPICIOUS_SAND
+    fill-block: SAND
+  tomb:
+    display-name: 贵族墓
+    description: 一座不设封土的贵族墓，三层夯土之下压着随葬珍品。
+    size: 7
+    layers: 3
+    top-block: SUSPICIOUS_GRAVEL
+    fill-block: GRAVEL
+  palace:
+    display-name: 宫殿基址
+    description: 殿堂的夯土基址，规模宏大、埋藏最深，传闻镇馆之宝出于此。
+    size: 9
+    layers: 4
+    top-block: SUSPICIOUS_GRAVEL
+    fill-block: SAND
