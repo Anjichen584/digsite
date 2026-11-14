@@ -1,12 +1,15 @@
 package com.digsite.cmd;
 
 import com.digsite.DigSitePlugin;
+import com.digsite.achieve.AchieveStore;
 import com.digsite.model.Model;
+import com.digsite.restore.RestorationService;
 import com.digsite.store.CodexStore;
 import com.digsite.store.MuseumStore;
 import com.digsite.store.PlayerStore;
 import com.digsite.store.SitesStore;
 import com.digsite.util.ItemCodec;
+import com.digsite.util.KitCodec;
 import com.digsite.util.Msg;
 import com.digsite.util.YamlIo;
 import org.bukkit.Material;
@@ -91,6 +94,8 @@ public final class SelfTest {
         failed = 0;
         failures.clear();
         runCodec();
+        runKits();
+        runRestoreMath();
         runCatalog();
         runYamlIo();
         runConfig();
@@ -164,6 +169,68 @@ public final class SelfTest {
         t("成色 100 → 无损", () -> a(ItemCodec.qualityLine(100).contains("无损"), "100 应为无损"));
     }
 
+    // ---------- 1.5 KitCodec（E1 套件 / E3 拓片） ----------
+
+    private void runKits() {
+        t("套件精修钳 kit_type=tweezer", () ->
+                a("tweezer".equals(KitCodec.kitType(KitCodec.tweezer())), "kitType 应为 tweezer"));
+        t("套件粘合剂 kit_type=glue", () ->
+                a("glue".equals(KitCodec.kitType(KitCodec.glue())), "kitType 应为 glue"));
+        t("普通物品 kitType 为 null", () ->
+                a(KitCodec.kitType(new ItemStack(Material.STONE)) == null, "石头不应被识别为套件"));
+        t("拓片 isReplica 识别", () ->
+                a(KitCodec.isReplica(KitCodec.replica("bone_flute", "骨笛")), "拓片应为 replica"));
+        t("普通纸不是拓片", () ->
+                a(!KitCodec.isReplica(new ItemStack(Material.PAPER)), "普通纸不应为 replica"));
+        t("拓片 artifactId 往返", () ->
+                eq("bone_flute", KitCodec.replicaId(KitCodec.replica("bone_flute", "骨笛")), "replicaId"));
+        t("拓片材质为 PAPER", () ->
+                a(KitCodec.replica("x", "某文物").getType() == Material.PAPER, "拓片应为 PAPER"));
+        t("consumeFrom 精确移除 1 个（3→2）", () -> {
+            ItemStack[] storage = {KitCodec.tweezer()};
+            storage[0].setAmount(3);
+            eq(1, KitCodec.consumeFrom(storage, "tweezer"), "移除数");
+            eq(2, storage[0].getAmount(), "剩余数量");
+        });
+        t("consumeFrom 单件移除置空", () -> {
+            ItemStack[] storage = {KitCodec.glue()};
+            eq(1, KitCodec.consumeFrom(storage, "glue"), "移除数");
+            a(storage[0] == null, "单件应置 null");
+        });
+        t("consumeFrom 非套件不动", () -> {
+            ItemStack[] storage = {new ItemStack(Material.SLIME_BALL, 5)};
+            eq(0, KitCodec.consumeFrom(storage, "glue"), "不应移除");
+            eq(5, storage[0].getAmount(), "数量不变");
+        });
+        t("consumeFrom 空数组安全", () ->
+                eq(0, KitCodec.consumeFrom(new ItemStack[0], "tweezer"), "空数组返回 0"));
+        t("两配方已注册", () -> {
+            a(!plugin.getServer().getRecipesFor(KitCodec.tweezer()).isEmpty(), "精修钳配方缺失");
+            a(!plugin.getServer().getRecipesFor(KitCodec.glue()).isEmpty(), "粘合剂配方缺失");
+        });
+    }
+
+    // ---------- 1.7 修复度合成（E1 口径纯函数） ----------
+
+    private void runRestoreMath() {
+        t("合成 无套件 88 → 88", () ->
+                eq(88, RestorationService.composeDegree(new int[]{88}, 0, 60, 0, 0, 10), "degree"));
+        t("合成 精修钳 98+10 → clamp 100", () ->
+                eq(100, RestorationService.composeDegree(new int[]{98}, 0, 60, 5, 10, 10), "degree"));
+        t("合成 满配奖励生效（全部≥60 +5）", () ->
+                eq(65, RestorationService.composeDegree(new int[]{60, 60}, 0, 60, 5, 0, 10), "degree"));
+        t("合成 有片<60 无满配（40,60→50）", () ->
+                eq(50, RestorationService.composeDegree(new int[]{40, 60}, 0, 60, 5, 0, 10), "degree"));
+        t("合成 粘合剂 floor 抬升均值（40,60→60）", () ->
+                eq(60, RestorationService.composeDegree(new int[]{40, 60}, 60, 60, 0, 0, 10), "degree"));
+        t("合成 floor 后满配生效（40,60→65）", () ->
+                eq(65, RestorationService.composeDegree(new int[]{40, 60}, 60, 60, 5, 0, 10), "degree"));
+        t("合成 clamp 下限 min-integrity（10→10）", () ->
+                eq(10, RestorationService.composeDegree(new int[]{10}, 0, 60, 5, 0, 10), "degree"));
+        t("合成 双套件叠加（50,50→60均值+5+10=75）", () ->
+                eq(75, RestorationService.composeDegree(new int[]{50, 50}, 60, 60, 5, 10, 10), "degree"));
+    }
+
     // ---------- 2. ArtifactCatalog ----------
 
     private void runCatalog() {
@@ -234,6 +301,13 @@ public final class SelfTest {
         t("config restore.min-integrity=10", () -> eq(10, c.minIntegrity(), "min-integrity"));
         t("config museum.max-halls=6", () -> eq(6, c.museumMaxHalls(), "max-halls"));
         t("config sites.min-distance-between=400", () -> eq(400, c.siteMinDistanceBetween(), "min-distance-between"));
+        // E1 新增键
+        t("config restore.kits-enabled=true", () ->
+                eq(true, c.raw().getBoolean("restore.kits-enabled", true), "kits-enabled"));
+        t("config restore.tweezer-bonus=10", () ->
+                eq(10, c.raw().getInt("restore.tweezer-bonus", 10), "tweezer-bonus"));
+        t("config restore.glue-floor=60", () ->
+                eq(60, c.raw().getInt("restore.glue-floor", 60), "glue-floor"));
     }
 
     // ---------- 5. 命令三处同源 ----------
@@ -305,6 +379,7 @@ public final class SelfTest {
             runPlayerStore(dir);
             runMuseumStore(dir);
             runCodexStore(dir);
+            runAchieveStore(dir);
         } finally {
             deleteRecursively(dir);
         }
@@ -533,6 +608,63 @@ public final class SelfTest {
             eq("3", reloaded.records().stream()
                     .filter(r -> r.key().equals("clears-first")).findFirst().orElseThrow().value(), "纪录往返");
             a(reloaded.sitesClearedTotal() >= 1, "清剿总数往返");
+        });
+    }
+
+    private void runAchieveStore(File dir) {
+        UUID a1 = UUID.nameUUIDFromBytes("achv-1".getBytes());
+        t("AchieveStore mark 首次 true", () -> {
+            AchieveStore s = new AchieveStore(dir);
+            a(s.mark(a1, "first_restore"), "首次达成应 true");
+        });
+        t("AchieveStore mark 幂等（第二次 false）", () -> {
+            AchieveStore s = new AchieveStore(dir);
+            s.mark(a1, "first_restore");
+            a(!s.mark(a1, "first_restore"), "重复达成应 false");
+        });
+        t("AchieveStore has/of 往返", () -> {
+            AchieveStore s = new AchieveStore(dir);
+            s.mark(a1, "vote_first");
+            s.mark(a1, "site_3");
+            a(s.has(a1, "vote_first"), "has 应命中");
+            a(!s.has(a1, "donate_5"), "未达成不应命中");
+            eq(2, s.of(a1).size(), "of 数量");
+            a(s.of(UUID.nameUUIDFromBytes("achv-none".getBytes())).isEmpty(), "无记录玩家 of 应空");
+        });
+        t("AchieveStore 计数器 bump/get", () -> {
+            AchieveStore s = new AchieveStore(dir);
+            eq(1L, s.bumpCounter("visit:EX-A"), "首次 +1");
+            eq(2L, s.bumpCounter("visit:EX-A"), "再次 +1");
+            eq(0L, s.getCounter("visit:EX-B"), "无关 key 应 0");
+        });
+        t("AchieveStore 计数器 key 相互独立", () -> {
+            AchieveStore s = new AchieveStore(dir);
+            s.bumpCounter("perfect:" + a1);
+            s.bumpCounter("perfect:" + a1);
+            s.bumpCounter("perfect:" + a1);
+            eq(3L, s.getCounter("perfect:" + a1), "同 key 累计");
+            eq(0L, s.getCounter("common:" + a1 + ":bone_flute"), "异 key 独立");
+        });
+        t("AchieveStore flush+重载 成就集往返", () -> {
+            AchieveStore s = new AchieveStore(dir);
+            s.mark(a1, "epic_first");
+            s.mark(a1, "legendary_first");
+            s.mark(UUID.nameUUIDFromBytes("achv-2".getBytes()), "kit_master");
+            s.flush();
+            AchieveStore reloaded = new AchieveStore(dir);
+            a(reloaded.has(a1, "epic_first"), "epic_first 往返");
+            a(reloaded.has(a1, "legendary_first"), "legendary_first 往返");
+            a(reloaded.has(UUID.nameUUIDFromBytes("achv-2".getBytes()), "kit_master"), "他人成就往返");
+            a(!reloaded.mark(a1, "epic_first"), "重载后幂等仍成立");
+        });
+        t("AchieveStore flush+重载 计数器往返", () -> {
+            AchieveStore s = new AchieveStore(dir);
+            s.bumpCounter("visit:EX-K");
+            s.bumpCounter("visit:EX-K");
+            s.bumpCounter("visit:EX-K");
+            s.flush();
+            AchieveStore reloaded = new AchieveStore(dir);
+            eq(3L, reloaded.getCounter("visit:EX-K"), "visit 计数往返");
         });
     }
 

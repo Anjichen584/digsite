@@ -1,5 +1,7 @@
 package com.digsite;
 
+import com.digsite.achieve.AchieveService;
+import com.digsite.achieve.AchieveStore;
 import com.digsite.catalog.ArtifactCatalog;
 import com.digsite.codex.CodexService;
 import com.digsite.cmd.DigCommand;
@@ -41,6 +43,8 @@ public final class DigSitePlugin extends JavaPlugin {
 
     private Announcer announcer;
     private CodexService codexService;
+    private AchieveStore achieveStore;
+    private AchieveService achieveService;
     private MuseumService museumService;
     private VoteService voteService;
     private RestorationService restorationService;
@@ -67,6 +71,12 @@ public final class DigSitePlugin extends JavaPlugin {
         announcer.start(this);
 
         codexService = new CodexService(this, codexStore, announcer, codec, catalog, config0);
+        achieveStore = new AchieveStore(getDataFolder());
+        achieveService = new AchieveService(this, achieveStore);
+        achieveService.start();
+        if (config0.raw().getBoolean("restore.kits-enabled", true)) {
+            com.digsite.util.KitCodec.registerRecipes(this);
+        }
         museumService = new MuseumService(this, museumStore, codec, announcer, catalog, config0);
         voteService = new VoteService(this, museumStore, playerStore, codexService, announcer, config0);
         restorationService = new RestorationService(this, codec, catalog, playerStore, codexService, config0);
@@ -100,6 +110,7 @@ public final class DigSitePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (siteScheduler != null) siteScheduler.stop();
+        if (achieveService != null) achieveService.stop();
         if (siteService != null) siteService.shutdown();
         if (museumService != null) museumService.shutdown();
         if (announcer != null) announcer.stop();
@@ -107,6 +118,7 @@ public final class DigSitePlugin extends JavaPlugin {
         if (playerStore != null) playerStore.flush();
         if (museumStore != null) museumStore.flush();
         if (codexStore != null) codexStore.flush();
+        if (achieveStore != null) achieveStore.flush();
     }
 
     @Override
@@ -161,6 +173,14 @@ public final class DigSitePlugin extends JavaPlugin {
 
     public CodexService codexService() {
         return codexService;
+    }
+
+    public AchieveStore achieveStore() {
+        return achieveStore;
+    }
+
+    public AchieveService achieveService() {
+        return achieveService;
     }
 
     public MuseumService museumService() {

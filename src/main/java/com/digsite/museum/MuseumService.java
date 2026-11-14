@@ -160,6 +160,11 @@ public final class MuseumService implements Listener {
     /** /digs donate：读主手成品 → 分配第一个空台 → 生成 ItemDisplay + TextDisplay → 持久化。 */
     public void donateHand(Player p) {
         ItemStack hand = p.getInventory().getItemInMainHand();
+        // E3：纪念拓片不可回流捐献
+        if (com.digsite.util.KitCodec.isReplica(hand)) {
+            Msg.send(p, "<red>这是纪念拓片，博物馆不收。</red><gray>它是馆藏纪念品，请留作展示。</gray>");
+            return;
+        }
         Model.ArtifactData data = codec.readArtifact(hand);
         if (data == null) {
             Msg.send(p, "<red>主手不是修复完成的文物成品（无 PDC 标识）。</red>");
@@ -231,6 +236,9 @@ public final class MuseumService implements Listener {
 
         // 图鉴捐献回调（epic+ 公告 / 馆藏稀有度首件纪录）
         plugin.codexService().onDonation(p, def);
+        // 捐献统计 + 成就回调（E2/E3）：donate_5 以 PlayerStore.donations 为准
+        plugin.playerStore().bumpDonations(p.getUniqueId(), p.getName(), 1);
+        if (plugin.achieveService() != null) plugin.achieveService().checkDonate(p);
 
         Msg.send(p, "<green>捐献成功！</green><gray>「</gray><gold>" + def.name() + "</gold><gray>」陈列于分馆「</gray>"
                 + targetHall.name() + "<gray>」展台 #</gray><white>" + (targetPed.index() + 1)
@@ -316,7 +324,8 @@ public final class MuseumService implements Listener {
         }
         if (st.page > 0) inv.setItem(45, navItem(Material.ARROW, "<yellow>◀ 上一页</yellow>"));
         inv.setItem(48, navItem(Material.ARROW, "<yellow>◀ 返回总览</yellow>"));
-        inv.setItem(49, infoItem("<gray>点击展品看详情；管理员 shift+点击移除展品</gray>"));
+        inv.setItem(49, infoItem("<gray>左键点击展品看详情；右键兑换拓片；管理员 shift+点击移除</gray>"));
+        inv.setItem(50, replicaButton());
         if (start + 45 < exhibits.size()) inv.setItem(53, navItem(Material.ARROW, "<yellow>下一页 ▶</yellow>"));
         p.openInventory(inv);
         exhibitButtons.put(p.getUniqueId(), exhibits);
@@ -336,6 +345,20 @@ public final class MuseumService implements Listener {
         lore.add(Msg.mm("<gray>展馆：</gray><white>" + ex.hallName() + "</white>"));
         lore.add(Msg.mm("<dark_gray>ID：</dark_gray><dark_green>" + ex.exhibitId() + "</dark_green>"));
         lore.add(Msg.mm("<dark_gray>点击输出铭牌详情</dark_gray>"));
+        meta.lore(lore);
+        it.setItemMeta(meta);
+        return it;
+    }
+
+    /** 拓片兑换说明按钮（展品页 50 号槽）。 */
+    private ItemStack replicaButton() {
+        ItemStack it = new ItemStack(Material.EMERALD);
+        var meta = it.getItemMeta();
+        meta.displayName(Msg.mm("<green>拓片兑换</green>"));
+        List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
+        lore.add(Msg.mm("<gray>在展品上按</gray><yellow> 右键</yellow><gray>，消耗</gray><white> 绿宝石 ×"
+                + com.digsite.util.KitCodec.REPLICA_COST + "</white><gray> 兑换该文物拓片。</gray>"));
+        lore.add(Msg.mm("<dark_gray>拓片为馆藏纪念品，不可捐献。</dark_gray>"));
         meta.lore(lore);
         it.setItemMeta(meta);
         return it;
@@ -437,14 +460,67 @@ public final class MuseumService implements Listener {
         List<Model.ExhibitInfo> list = exhibitButtons.getOrDefault(p.getUniqueId(), List.of());
         int idx = st.page * 45 + slot;
         if (slot < 45 && idx < list.size()) {
-            // 普通点击 → 聊天输出该展品铭牌详情
             Model.ExhibitInfo ex = list.get(idx);
+            // 右键 → 兑换拓片（E3）
+            if (e.getClick() == org.bukkit.event.inventory.ClickType.RIGHT) {
+                exchangeReplica(p, ex);
+                return;
+            }
+            // 左键普通点击 → 聊天输出铭牌详情 + 参观计数（E3，计数存 AchieveStore 通用 KV）
+            long visits = -1;
+            if (plugin.achieveStore() != null) {
+                visits = plugin.achieveStore().bumpCounter("visit:" + ex.exhibitId());
+            }
             Msg.send(p, "<gold>" + safeName(ex.artifactId()) + "</gold> "
                     + ItemCodec.qualityLine(ex.repairDegree()));
             Msg.send(p, "<gray>修复者/捐献者：</gray><white>" + ex.donorName()
                     + "</white><gray> · 馆：</gray><white>" + ex.hallName()
-                    + "</white><gray> · ID：</gray><white>" + ex.exhibitId() + "</white>");
+                    + "</white><gray> · ID：</gray><white>" + ex.exhibitId() + "</white>"
+                    + (visits >= 0 ? "<gray> · 参观 </gray><white>" + visits + "</white><gray> 次</gray>" : ""));
+            Msg.send(p, "<gray>想留个纪念？</gray><yellow>右键点击本展品</yellow><gray>，绿宝石 ×"
+                    + com.digsite.util.KitCodec.REPLICA_COST + " 兑换拓片。</gray>");
         }
+    }
+
+    /**
+     * 拓片兑换（E3）：绿宝石 ×{@link com.digsite.util.KitCodec#REPLICA_COST} → 该文物拓片。
+     * 先精确扣款（跨槽位累计扣除）后发货；拓片不入账本，无需回滚。背包满则掉在脚下。
+     */
+    private void exchangeReplica(Player p, Model.ExhibitInfo ex) {
+        int cost = com.digsite.util.KitCodec.REPLICA_COST;
+        ItemStack[] storage = p.getInventory().getStorageContents();
+        int have = 0;
+        for (ItemStack it : storage) {
+            if (it != null && it.getType() == Material.EMERALD) have += it.getAmount();
+        }
+        if (have < cost) {
+            Msg.send(p, "<red>绿宝石不足：</red><gray>兑换拓片需要</gray><white> 绿宝石 ×" + cost
+                    + "</white><gray>，你背包里只有 </gray><yellow>" + have + "</yellow><gray> 颗。</gray>");
+            return;
+        }
+        // 先扣：跨槽位累计扣除 cost 颗
+        int remaining = cost;
+        for (int i = 0; i < storage.length && remaining > 0; i++) {
+            ItemStack it = storage[i];
+            if (it == null || it.getType() != Material.EMERALD) continue;
+            int take = Math.min(remaining, it.getAmount());
+            remaining -= take;
+            if (it.getAmount() <= take) {
+                p.getInventory().setItem(i, null);
+            } else {
+                ItemStack rest = it.clone();
+                rest.setAmount(it.getAmount() - take);
+                p.getInventory().setItem(i, rest);
+            }
+        }
+        // 后给：拓片纪念品（PDC replica=artifactId）
+        ItemStack rp = com.digsite.util.KitCodec.replica(ex.artifactId(), safeName(ex.artifactId()));
+        Map<Integer, ItemStack> leftover = p.getInventory().addItem(rp);
+        for (ItemStack rest : leftover.values()) {
+            p.getWorld().dropItemNaturally(p.getLocation(), rest);
+        }
+        Msg.send(p, "<green>拓片到手！</green><gray>「</gray><gold>" + safeName(ex.artifactId())
+                + "</gold><gray> · 拓片」已放入背包（馆藏纪念，不可捐献）。</gray>");
     }
 
     @EventHandler

@@ -26,23 +26,27 @@ import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 遗址生成与挖掘状态机（B 部分）。
- * 职责：sites.yml 模板加载 / 随机与定点落遗址 / 刷挖状态机（手速惩罚、分层削除、碎片掉落）/ 遗址保护查询。
+ * 职责：sites.yml 模板加载 / 随机与定点落遗址（含偏好水边落点）/ 壳层建造（D4 通用化）/
+ *       刷挖状态机（手速惩罚、分层削除、碎片掉落、传说遗物 BossBar）/ 遗址保护查询 / 盗墓贼与 BossBar 生命周期。
  * 所有世界编辑均由 Bukkit 主线程调度保证（事件与定时任务都在主线程触发）。
  */
 public final class SiteService {
 
-    /** sites.yml 单档模板。 */
+    /** sites.yml 单档模板。shell 为可选外圈壳层方块（null = 无壳）；preferWater 为落点偏好水边。 */
     private record Tier(String id, String display, String desc,
-                        int size, int layers, Material top, Material fill) {}
+                        int size, int layers, Material top, Material fill,
+                        Material shell, boolean preferWater) {}
 
     /** 方块坐标 → (遗址 id, cells 下标)。cells 下标 = (dz+h)*size + (dx+h)，dz 外层 dx 内层行优先。 */
     private record CellRef(String siteId, int index) {}
@@ -67,6 +71,11 @@ public final class SiteService {
     /** 每遗址最后刷挖者名（结算归属）。 */
     private final Map<String, String> lastBrusher = new ConcurrentHashMap<>();
 
+    /** D3：传说遗物 BossBar（siteId → bar）。 */
+    private final SiteBossBar bossBar;
+    /** D2：盗墓贼事件（palace/glacier 夜间骚扰）。 */
+    private final SiteGuard guard;
+
     public SiteService(DigSitePlugin plugin, SitesStore store, ArtifactCatalog catalog, ItemCodec codec,
                        CodexService codexService, PlayerStore playerStore, DigSiteConfig config) {
         this.plugin = plugin;
@@ -79,6 +88,9 @@ public final class SiteService {
         saveDefaultSites();
         loadTiers();
         rebuildIndex();
+        this.bossBar = new SiteBossBar(plugin, this);
+        this.guard = new SiteGuard(plugin, this);
+        this.guard.start();
     }
 
     // ---------------------------------------------------------------- 模板加载
@@ -99,20 +111,27 @@ public final class SiteService {
                 if (t == null) continue;
                 Material top = match(t.getString("top-block"), Material.SUSPICIOUS_SAND);
                 Material fill = match(t.getString("fill-block"), Material.SAND);
+                // D4 壳层通用化：可选 shell-block，非空则建场时包壳（非法材质名视为无壳）
+                String shellName = t.getString("shell-block");
+                Material shell = (shellName == null || shellName.isBlank()) ? null : match(shellName, null);
                 int size = Math.max(3, t.getInt("size", 5));
                 if (size % 2 == 0) size++; // 强制奇数，保证有中心
                 int layers = Math.max(1, t.getInt("layers", 2));
                 tiers.put(id, new Tier(id,
                         t.getString("display-name", id),
                         t.getString("description", ""),
-                        size, layers, top, fill));
+                        size, layers, top, fill,
+                        shell, t.getBoolean("prefer-water", false)));
             }
         }
         if (tiers.isEmpty()) {
             // 兜底：sites.yml 被删空也不至于无法开局
-            tiers.put("pit", new Tier("pit", "小型灰坑", "浅浅两层的先民灰坑。", 5, 2, Material.SUSPICIOUS_SAND, Material.SAND));
-            tiers.put("tomb", new Tier("tomb", "贵族墓", "三层夯土下的随葬珍品。", 7, 3, Material.SUSPICIOUS_GRAVEL, Material.GRAVEL));
-            tiers.put("palace", new Tier("palace", "宫殿基址", "规模宏大的四层殿基。", 9, 4, Material.SUSPICIOUS_GRAVEL, Material.SAND));
+            tiers.put("pit", new Tier("pit", "小型灰坑", "浅浅两层的先民灰坑。", 5, 2,
+                    Material.SUSPICIOUS_SAND, Material.SAND, null, false));
+            tiers.put("tomb", new Tier("tomb", "贵族墓", "三层夯土下的随葬珍品。", 7, 3,
+                    Material.SUSPICIOUS_GRAVEL, Material.GRAVEL, null, false));
+            tiers.put("palace", new Tier("palace", "宫殿基址", "规模宏大的四层殿基。", 9, 4,
+                    Material.SUSPICIOUS_GRAVEL, Material.SAND, null, false));
             plugin.getLogger().warning("sites.yml 缺失或为空，已启用内置三档默认模板。");
         }
     }
@@ -135,7 +154,11 @@ public final class SiteService {
         Random rnd = plugin.random();
         int attempts = Math.max(1, config.spawnAttempts());
         int minFromSpawn = Math.max(0, config.siteMinDistanceFromSpawn());
-        for (int i = 0; i < attempts; i++) {
+        // D1 落点特性「偏好水边」：以 2 倍尝试次数优先找周围 3 格含水的候选点，找不到退回普通点
+        boolean preferWater = t.preferWater();
+        int totalTries = preferWater ? attempts * 2 : attempts;
+        int fallbackX = Integer.MIN_VALUE, fallbackZ = 0;
+        for (int i = 0; i < totalTries; i++) {
             double dist = minFromSpawn + rnd.nextInt(1500);
             double ang = rnd.nextDouble() * Math.PI * 2;
             int x = spawn.getBlockX() + (int) Math.round(Math.cos(ang) * dist);
@@ -143,14 +166,54 @@ public final class SiteService {
             double dSpawn = Math.hypot(x - spawn.getX(), z - spawn.getZ());
             if (dSpawn < minFromSpawn) continue;
             if (tooCloseToExisting(x, z)) continue;
+            if (preferWater) {
+                if (nearWater(w, x, z, 3)) {
+                    Model.SiteInfo s = buildSite(t, w, x, z);
+                    if (s == null) continue; // 高度越界等，换下一个落点
+                    announceSpawn(t, w, x, z, dSpawn);
+                    return s;
+                }
+                if (fallbackX == Integer.MIN_VALUE) { fallbackX = x; fallbackZ = z; } // 留作无水兜底
+                continue;
+            }
             Model.SiteInfo s = buildSite(t, w, x, z);
             if (s == null) continue; // 高度越界等，换下一个落点
-            plugin.announcer().announce("<gold>野外发现新遗址</gold> <white>「" + t.display() + "」</white>"
-                    + "<gray>（" + t.desc() + "）位于出生点</gray> <yellow>" + compass(x - spawn.getX(), z - spawn.getZ())
-                    + "</yellow> <gray>约</gray> <yellow>" + (int) dSpawn + "</yellow> <gray>格（x=" + x + ", z=" + z + "）。</gray>");
+            announceSpawn(t, w, x, z, dSpawn);
             return s;
         }
+        if (preferWater && fallbackX != Integer.MIN_VALUE) {
+            Model.SiteInfo s = buildSite(t, w, fallbackX, fallbackZ);
+            if (s != null) {
+                announceSpawn(t, w, fallbackX, fallbackZ,
+                        Math.hypot(fallbackX - spawn.getX(), fallbackZ - spawn.getZ()));
+                return s;
+            }
+        }
         return null;
+    }
+
+    /** 落点发现公告（原逻辑抽出复用：水边优先 / 无水兜底两条路径共用）。 */
+    private void announceSpawn(Tier t, World w, int x, int z, double dSpawn) {
+        Location spawn = w.getSpawnLocation();
+        plugin.announcer().announce("<gold>野外发现新遗址</gold> <white>「" + t.display() + "」</white>"
+                + "<gray>（" + t.desc() + "）位于出生点</gray> <yellow>" + compass(x - spawn.getX(), z - spawn.getZ())
+                + "</yellow> <gray>约</gray> <yellow>" + (int) dSpawn + "</yellow> <gray>格（x=" + x + ", z=" + z + "）。</gray>");
+    }
+
+    /** 视作「水」的方块：水 / 海草 / 海带 / 气泡柱 / 各种冰。 */
+    private static final Set<Material> WATERISH = EnumSet.of(
+            Material.WATER, Material.SEAGRASS, Material.TALL_SEAGRASS, Material.KELP,
+            Material.KELP_PLANT, Material.BUBBLE_COLUMN,
+            Material.ICE, Material.PACKED_ICE, Material.BLUE_ICE, Material.FROSTED_ICE);
+
+    /** 落点偏好：周围 radius 格内任意列的最高方块含水系材质 → 视作水边。 */
+    private static boolean nearWater(World w, int x, int z, int radius) {
+        for (int dz = -radius; dz <= radius; dz++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                if (WATERISH.contains(w.getHighestBlockAt(x + dx, z + dz).getType())) return true;
+            }
+        }
+        return false;
     }
 
     /** 管理员定点落遗址：不走距离约束，但仍受 max-active 约束；失败返回 null。 */
@@ -215,7 +278,9 @@ public final class SiteService {
                 buildColumn(t, w, cx + dx, cy, cz + dz);
             }
         }
-        // 5) 落库 + 索引 + 公告
+        // 5) D4 壳层（可选）：格子柱外圈包壳，不属格子层、不进保护索引
+        if (t.shell() != null) buildShell(t, w, cx, cy, cz);
+        // 6) 落库 + 索引 + 公告
         String id = newSiteId();
         Model.SiteInfo site = new Model.SiteInfo(id, t.id(), w.getName(), cx, cy, cz, t.size(), t.layers(),
                 System.currentTimeMillis(), false);
@@ -240,6 +305,24 @@ public final class SiteService {
         w.getBlockAt(x, cy - t.layers(), z).setType(Material.STONE);
         for (int i = 1; i <= 3; i++) {
             w.getBlockAt(x, cy + i, z).setType(Material.AIR);
+        }
+    }
+
+    /**
+     * D4 壳层：在格子柱边格外一圈（半径 h+1 的方环，含四角）就地放置 shell 方块，
+     * 垂直覆盖 y ∈ [cy-layers, cy+1]（高度 = layers + 2），完整罩住柱体。
+     * 壳方块不编入 blockIndex → 保护查询天然放行玩家挖壳；挖掉不回滚（无存档数据）。
+     */
+    private void buildShell(Tier t, World w, int cx, int cy, int cz) {
+        int h = t.size() / 2;
+        int r = h + 1; // 边格外一圈
+        for (int dz = -r; dz <= r; dz++) {
+            for (int dx = -r; dx <= r; dx++) {
+                if (Math.abs(dx) <= h && Math.abs(dz) <= h) continue; // 只包外圈，不碰格子柱
+                for (int y = cy - t.layers(); y <= cy + 1; y++) {
+                    w.getBlockAt(cx + dx, y, cz + dz).setType(t.shell());
+                }
+            }
         }
     }
 
@@ -341,7 +424,10 @@ public final class SiteService {
         Model.SiteCell updated = new Model.SiteCell(cell.dx(), cell.dz(), kNew, integrity, done);
         store.updateCell(site.id(), updated);
         if (rollDrop) rollDrop(player, site, w, top.getLocation(), integrity);
-        if (done) maybeFinishSite(site);
+        if (done) {
+            bossBar.update(site.id()); // D3：格子挖穿 → BossBar 进度刷新（handleBrush/handleAdminBreak 共用此点）
+            maybeFinishSite(site);
+        }
         return updated;
     }
 
@@ -356,6 +442,13 @@ public final class SiteService {
                 def.name(), def.pieces());
         w.dropItemNaturally(at.clone().add(0.5, 1.0, 0.5), frag);
         playerStore.bumpFragments(player, 1);
+        // D3：roll 到 legendary → 全服 urgent 公告 + 该遗址挂 BossBar
+        if ("legendary".equalsIgnoreCase(def.rarity())) {
+            plugin.announcer().announceUrgent("<light_purple>传说遗物现世！</light_purple> <white>" + def.name()
+                    + "</white> <gray>出土于遗址</gray> <yellow>「" + tierDisplay(site.tier()) + "」" + site.id()
+                    + "</yellow> <gray>，剩余发掘进度已挂 BossBar。</gray>");
+            bossBar.show(site.id(), def.name());
+        }
     }
 
     /** 全格 done → 关场结算：关库 + 图鉴 + 计数 + 全服庆祝公告。 */
@@ -368,6 +461,8 @@ public final class SiteService {
         clearIndex(site.id());
         cleanupCellKeys(site.id());
         lastBrusher.remove(site.id());
+        bossBar.hide(site.id());   // D3 泄漏红线：关场必撤 Bar
+        guard.clearSite(site.id()); // D2：关场顺带清掉该遗址名下盗墓贼
         codexService.onSiteCleared(site.id(), site.tier(), name);
         playerStore.bumpSitesCleared(name);
         plugin.announcer().announceUrgent("<gold>遗址完整发掘！</gold> <white>「" + tierDisplay(site.tier())
@@ -396,7 +491,7 @@ public final class SiteService {
         return siteId == null ? null : store.get(siteId);
     }
 
-    /** 关闭遗址：标 closed + 清索引 + 公告（不做任何奖励结算）。 */
+    /** 关闭遗址：标 closed + 清索引 + 撤 BossBar + 清盗墓贼 + 公告（不做任何奖励结算）。 */
     public void closeSite(String siteId, String reason) {
         Model.SiteInfo s = store.get(siteId);
         if (s == null || s.closed()) return;
@@ -404,6 +499,8 @@ public final class SiteService {
         clearIndex(siteId);
         cleanupCellKeys(siteId);
         lastBrusher.remove(siteId);
+        bossBar.hide(siteId);      // D3 泄漏红线：关场必撤 Bar
+        guard.clearSite(siteId);   // D2：关场清掉该遗址名下盗墓贼
         plugin.announcer().announce("<gray>遗址</gray> <white>「" + tierDisplay(s.tier()) + "」" + siteId
                 + "</white> <gray>" + (reason == null || reason.isBlank() ? "已关闭" : reason) + "。</gray>");
     }
@@ -412,7 +509,25 @@ public final class SiteService {
         return new ArrayList<>(tiers.keySet());
     }
 
+    // ---------------------------------------------------------------- BossBar 进度查询（包内供 SiteBossBar 调用）
+
+    /** D3：遗址格子总数（BossBar 进度分母）。 */
+    int totalCells(String siteId) {
+        return store.cells(siteId).size();
+    }
+
+    /** D3：剩余未完成格数（BossBar 进度分子）。 */
+    int remainingCells(String siteId) {
+        int n = 0;
+        for (Model.SiteCell c : store.cells(siteId)) {
+            if (!c.done()) n++;
+        }
+        return n;
+    }
+
     public void shutdown() {
+        guard.shutdown();       // D2：撤任务 + 清场（不落盘，直接移除在场盗墓贼）
+        bossBar.shutdownAll();  // D3 泄漏红线：disable 时 removeAllBar，map 全清
         store.flush();
     }
 

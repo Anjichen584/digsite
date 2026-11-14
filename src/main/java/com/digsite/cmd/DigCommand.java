@@ -20,7 +20,7 @@ import java.util.UUID;
 public final class DigCommand implements CommandExecutor, TabCompleter {
 
     public static final List<String> SUBCOMMANDS = List.of(
-            "help", "board", "codex", "museum", "restore", "donate", "vote", "stats", "selftest", "admin");
+            "help", "board", "codex", "museum", "restore", "donate", "vote", "achieve", "stats", "selftest", "admin");
 
     public static final List<String> ADMIN_SUBS = List.of(
             "spawn", "tp", "close", "hall", "exhibit", "reload");
@@ -48,6 +48,7 @@ public final class DigCommand implements CommandExecutor, TabCompleter {
                 "<white>/digs restore</white> <gray>— 打开碎片修复台（集齐同一文物的碎片可拼合）</gray>",
                 "<white>/digs donate</white> <gray>— 手持成品文物捐入博物馆</gray>",
                 "<white>/digs vote 展品ID</white> <gray>— 为镇馆之宝投票（每人每轮一票）</gray>",
+                "<white>/digs achieve</white> <gray>— 打开考古成就墙（12 条成就与进度）</gray>",
                 "<white>/digs stats [玩家名]</white> <gray>— 查看挖掘/捐献统计与纪录墙</gray>",
                 "<white>/digs selftest</white> <gray>— 运行插件自检</gray>",
                 "<white>/digs admin …</white> <gray>— 管理员指令，见下</gray>",
@@ -108,6 +109,11 @@ public final class DigCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 plugin.voteService().vote(p, args[1]);
+            }
+            case "achieve" -> {
+                Player p = requirePlayer(sender);
+                if (p == null) return true;
+                plugin.achieveService().openGui(p);
             }
             case "stats" -> handleStats(sender, args);
             case "selftest" -> {

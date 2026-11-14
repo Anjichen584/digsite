@@ -35,7 +35,11 @@ import java.util.Map;
  *   <li>成色档位：degree &lt; broken-degree → 残缺 / &lt; perfect-degree → 完整 / ≥ perfect-degree → 无损；</li>
  *   <li>修复消耗全部被指派的碎片物品（按 PDC 数据 exact 匹配移除各 1 件），产出
  *       {@code ItemCodec.artifact} 成品入背包（背包满则掉在玩家脚下）；</li>
- *   <li>玩家统计 bumpRestored + 图鉴回调 onArtifactRestored；无损 → 全服紧急公告。</li>
+ *   <li>E1 套件（{@code KitCodec}，config {@code restore.kits-enabled} 总开关）：背包含
+ *       「粘合剂」→ 每片 integrity 先抬到 max(integrity, glue-floor) 再求均值；含
+ *       「精修钳」→ 均值之上 +tweezer-bonus；两件套件只在修复成功时各消耗 1 件；</li>
+ *   <li>玩家统计 bumpRestored + 图鉴回调 onArtifactRestored + 成就回调
+ *       {@code achieveService().checkRestore}；无损 → 全服紧急公告。</li>
  * </ol>
  */
 public final class RestorationService {
@@ -142,16 +146,24 @@ public final class RestorationService {
             }
         }
 
-        // 2) 计算修复度：各片 integrity 均值（四舍五入）+ 满配奖励（所有片 ≥ broken-degree 时 +full-set-bonus），clamp [min-integrity, 100]
-        int sum = 0;
-        boolean fullBonus = true;
-        for (Model.FragmentData fd : assigned.values()) {
-            sum += fd.integrity();
-            if (fd.integrity() < config.brokenDegree()) fullBonus = false;
-        }
-        int degree = (int) Math.round(sum / (double) def.pieces());
-        if (fullBonus) degree += config.fullSetBonus();
-        degree = Math.max(config.minIntegrity(), Math.min(100, degree));
+        // 1.5) 套件参与判定（只在修复成功的路径上消耗；失败路径上方已 return，不消耗）
+        boolean kitsEnabled = config.raw().getBoolean("restore.kits-enabled", true);
+        boolean useTweezer = kitsEnabled && com.digsite.util.KitCodec.hasTweezer(p);
+        boolean useGlue = kitsEnabled && com.digsite.util.KitCodec.hasGlue(p);
+
+        // 2) 计算修复度（E1 口径）：floor（粘合剂保底）先行 → 均值 → 满配奖励 → 精修钳加成 → clamp [min-integrity, 100]
+        int[] integrities = new int[assigned.size()];
+        int idx = 0;
+        for (Model.FragmentData fd : assigned.values()) integrities[idx++] = fd.integrity();
+        int degree = composeDegree(integrities,
+                useGlue ? config.raw().getInt("restore.glue-floor", 60) : 0,
+                config.brokenDegree(), config.fullSetBonus(),
+                useTweezer ? config.raw().getInt("restore.tweezer-bonus", 10) : 0,
+                config.minIntegrity());
+
+        // 2.5) 修复成功，消耗套件（各 1 件；背包里已确认存在）
+        if (useTweezer) com.digsite.util.KitCodec.consumeTweezer(p);
+        if (useGlue) com.digsite.util.KitCodec.consumeGlue(p);
 
         // 3) 产出成品入背包（满则掉地上）
         ItemStack product = codec.artifact(
@@ -164,6 +176,10 @@ public final class RestorationService {
         // 4) 统计 + 图鉴回调
         playerStore.bumpRestored(p.getUniqueId(), p.getName(), 1);
         codexService.onArtifactRestored(p, def, degree);
+        // 成就回调（E2）：套件参与即算 kit_master
+        if (plugin.achieveService() != null) {
+            plugin.achieveService().checkRestore(p, def, degree, useTweezer || useGlue);
+        }
 
         // 5) 玩家提示 + 无损全服公告
         Msg.send(p, "<green>修复完成！</green>" + ItemCodec.qualityLine(degree)
@@ -173,6 +189,27 @@ public final class RestorationService {
                     + p.getName() + "</white><gray> 以完美手法修复出了无损「</gray><gold>" + def.name()
                     + "</gold><gray>」！</gray>");
         }
+    }
+
+    /**
+     * 纯函数（供自检）：修复度合成，E1 口径——
+     * 粘合剂 floor（&gt;0 时每片 integrity 抬到 max(integrity, glueFloor)）→ 均值（四舍五入）
+     * → 满配奖励（所有片 ≥ brokenDegree 时 +fullSetBonus，按 floor 后的值判定）
+     * → 精修钳加成（tweezerBonus）→ clamp [minIntegrity, 100]。
+     */
+    public static int composeDegree(int[] integrities, int glueFloor, int brokenDegree,
+                             int fullSetBonus, int tweezerBonus, int minIntegrity) {
+        long sum = 0;
+        boolean fullBonus = true;
+        for (int raw : integrities) {
+            int v = glueFloor > 0 ? Math.max(raw, glueFloor) : raw;
+            sum += v;
+            if (v < brokenDegree) fullBonus = false;
+        }
+        int degree = (int) Math.round(sum / (double) integrities.length);
+        if (fullBonus) degree += fullSetBonus;
+        degree += tweezerBonus;
+        return Math.max(minIntegrity, Math.min(100, degree));
     }
 
     /** 拼图菜单（供 GUI 访问 def 等）。 */

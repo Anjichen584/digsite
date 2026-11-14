@@ -101,3 +101,13 @@ site-tier-weights:
     rare: 40
     epic: 32
     legendary: 8
+  wreck:      # 沉船遗骸
+    common: 30
+    rare: 45
+    epic: 22
+    legendary: 3
+  glacier:    # 冰封祭坛
+    common: 20
+    rare: 40
+    epic: 32
+    legendary: 8

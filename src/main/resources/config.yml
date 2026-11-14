@@ -28,6 +28,9 @@ restore:
   perfect-degree: 95           # 无损成色阈值
   broken-degree: 60            # 完整/残缺分界
   full-set-bonus: 5            # 全片齐额外修复度奖励
+  kits-enabled: true           # 修复套件总开关（精修钳/粘合剂 + 配方注册）
+  tweezer-bonus: 10            # 精修钳：成品修复度加成（上限 100）
+  glue-floor: 60               # 粘合剂：每片残片成色保底抬到此值再求均值
 
 announce:
   throttle-seconds: 3          # 公告队列节流（秒）

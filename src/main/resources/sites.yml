@@ -2,6 +2,10 @@
 # size 必须为奇数（保证有中心格）；layers 为每格挖掘层数；
 # top-block 建议用 SUSPICIOUS_SAND / SUSPICIOUS_GRAVEL（原版可疑方块，刷子可交互）；
 # fill-block 为下层垫层（SAND/GRAVEL）；底座固定 STONE，柱顶上方自动清空 3 格。
+# 可选扩展键：
+#   shell-block   外圈壳层方块（D4 通用化）：建场时在格子柱边格外一圈包高度 = layers+2 的壳，
+#                 壳不属于格子层、不进保护索引，玩家可自由挖掉且不回滚。
+#   prefer-water  落点特性：随机落点时优先选周围 3 格含水的候选点（尝试 2 倍次数，找不到退回普通点）。
 tiers:
   pit:
     display-name: 小型灰坑
@@ -24,3 +28,19 @@ tiers:
     layers: 4
     top-block: SUSPICIOUS_GRAVEL
     fill-block: SAND
+  wreck:
+    display-name: 沉船遗骸
+    description: 潮汐送来的沉船残骸，泥沙与龙骨之间压着海客的遗物。
+    size: 7
+    layers: 3
+    top-block: SUSPICIOUS_GRAVEL
+    fill-block: GRAVEL
+    prefer-water: true
+  glacier:
+    display-name: 冰封祭坛
+    description: 万年寒冰封锁的祭坛，须先凿开外圈冰壳，方可触及冻土下的献祭品。
+    size: 9
+    layers: 4
+    top-block: SUSPICIOUS_SAND
+    fill-block: SAND
+    shell-block: PACKED_ICE

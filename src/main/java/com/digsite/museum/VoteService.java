@@ -76,6 +76,8 @@ public final class VoteService {
         }
         Msg.send(p, "<green>投票成功！</green><gray>你把票投给了「</gray><gold>"
                 + safeName(ex.artifactId()) + "</gold><gray>」。</gray>");
+        // 成就回调（E2）：vote_first
+        if (plugin.achieveService() != null) plugin.achieveService().checkVote(p);
         // 按契约：领先不实时播报，仅成功提示；轮末结算统一公告
     }
 

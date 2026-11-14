@@ -1,10 +1,10 @@
-# 考古博物馆 · DigSite v0.1.0
+# 考古博物馆 · DigSite v0.2.0
 
 Minecraft **1.21.11**（Paper，已在 1.21.10 真机验证）生存服考古玩法插件，完全独立（不读不写任何其他插件的存档与 API）。
 完整链路：**野外落遗址 → 分层刷挖 → 碎片掉落 → 拼图修复 → 捐入博物馆 → 图鉴留名 / 纪录墙 / 镇馆之宝投票**。
 
 - 目标 Java：**21+**（编译 release 21）
-- 构建产物：`target/DigSite-0.1.0.jar`
+- 构建产物：`target/DigSite-0.2.0.jar`
 - 无第三方依赖，纯 Paper API + MiniMessage
 - `config-version`：1
 - 零 RPG：玩家无等级/属性/代币；奖励全原版物品
@@ -31,7 +31,8 @@ Minecraft **1.21.11**（Paper，已在 1.21.10 真机验证）生存服考古玩
 ```
 玩家：/digs help | board | codex [页] | museum | donate | vote <展品ID> | stats [玩家]
 管理：/digs admin spawn <tier> | tp <siteId> | close <siteId> | hall add <名> | hall list | exhibit remove <id> | reload
-自检：/digs selftest          （控制台可用 help/board/stats/selftest）
+自检：/digs achieve           成就 GUI（已达成绿旗/未达成灰书）
+/digs selftest          （控制台可用 help/board/stats/selftest）
 ```
 
 ## 三、构建与部署
@@ -58,4 +59,5 @@ mvn -B clean package
 
 | 版本 | 一句话 |
 | --- | --- |
+| **0.2.0** | P2 双轨拓展：**D 遗址纵深**（沉船遗骸/冰封祭坛新档位 + 冰壳通用机制 + 盗墓贼夜袭 + 传说遗物全服 BossBar）+ **E 修复·馆藏·成就**（精修钳/粘合剂套件 + 12 条成就 `/digs achieve` GUI + 参观计数 + 拓片纪念品不可再捐）+ 自检 78→108 条 |
 | **0.1.0** | 首版：遗址三档生成 + 挖掘状态机 + 修复拼图 + 博物馆 + 图鉴/投票 + 78 断言自检，真机全绿 |
