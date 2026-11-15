@@ -54,6 +54,7 @@ mvn -B clean package
 `tools/e2e-backup.js`（运行副本在 ForgingMaster-Lore/tools/guitest，连 `DIGSITE_PORT` 指定端口）：
 **16/16 PASS** —— 刷挖 300 交互 → 6 文物碎片 PDC 识别 → 修复台拼图 → 无损修复公告 → 建馆 → 捐献展台陈列 → 成就触发（藏而好施）→ 图鉴 GUI → 统计/纪录墙。
 专属测试服：`testserver/`（paper 1.21.10，端口 25577，RCON 25576/`digsite-test`，在线模式关）。
+专项实测副本：`tools/feature-backup.js`（盗墓贼断言为 0.35/2min 概率项，失败可重跑；服务端已实证）。
 
 ## 六、维护纪律（继承铸剑项目经验）
 
@@ -65,6 +66,7 @@ mvn -B clean package
 
 | 版本 | 一句话 |
 | --- | --- |
+| **0.2.0c** | 专项实测 12/12 确定性项全绿（wreck 沉船+顶块材质 / glacier 顶层+冰壳 8/8 方位 / 双 bot 并发清场恰一次关场 / 双 bot 各有猎获 / 传说遗物 BossBar 触发）；盗墓贼单独实证（日志：盗墓贼 x1 袭扰，roll 0.285 pass）；SiteGuard.spawnOne 改 boolean + 刷扰运营日志 |
 | **0.2.0b** | 真机 e2e 修 2 条 P1：RestoreMenu 会话在 openInventory 触发的 onClose 中被清（拼图页点击全失效）；Paper 对 cancelled 点击事后重发原槽内容压制增量渲染（指派改整窗重开 + 保留已指派） |
 | **0.2.0** | P2 双轨拓展：**D 遗址纵深**（沉船遗骸/冰封祭坛新档位 + 冰壳通用机制 + 盗墓贼夜袭 + 传说遗物全服 BossBar）+ **E 修复·馆藏·成就**（精修钳/粘合剂套件 + 12 条成就 `/digs achieve` GUI + 参观计数 + 拓片纪念品不可再捐）+ 自检 78→108 条 |
 | **0.1.0** | 首版：遗址三档生成 + 挖掘状态机 + 修复拼图 + 博物馆 + 图鉴/投票 + 78 断言自检，真机全绿 |

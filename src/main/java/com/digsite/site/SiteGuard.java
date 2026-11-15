@@ -124,8 +124,12 @@ final class SiteGuard implements Listener {
             if (rnd.nextDouble() >= SPAWN_CHANCE) continue;
             if (countAlive(site.id()) >= MAX_PER_SITE) continue;
             int n = 1 + rnd.nextInt(2); // 1~2 只
+            int spawned = 0;
             for (int i = 0; i < n && countAlive(site.id()) < MAX_PER_SITE; i++) {
-                spawnOne(site, w, rnd);
+                if (spawnOne(site, w, rnd)) spawned++;
+            }
+            if (spawned > 0) {
+                plugin.getLogger().info("[SiteGuard] 盗墓贼 x" + spawned + " 正在袭扰遗址 " + site.id());
             }
         }
     }
@@ -146,7 +150,7 @@ final class SiteGuard implements Listener {
     }
 
     /** 在遗址外圈 10~16 格随机点刷一只盗墓贼；刷出点避开格子柱与壳层外圈。 */
-    private void spawnOne(Model.SiteInfo site, World w, Random rnd) {
+    private boolean spawnOne(Model.SiteInfo site, World w, Random rnd) {
         int h = site.size() / 2;
         int dx = 0, dz = 0;
         boolean ok = false;
@@ -160,7 +164,7 @@ final class SiteGuard implements Listener {
                 break;
             }
         }
-        if (!ok) return; // 8 次都落进格内（几乎不可能），放弃本轮
+        if (!ok) return false; // 8 次都落进格内（几乎不可能），放弃本轮
         int x = site.cx() + dx, z = site.cz() + dz;
         int y = w.getHighestBlockYAt(x, z) + 1;
         EntityType type = rnd.nextDouble() < 0.6 ? EntityType.HUSK : EntityType.PILLAGER; // 60% 尸壳 / 40% 掠夺者
@@ -174,6 +178,7 @@ final class SiteGuard implements Listener {
             Entity e = Bukkit.getEntity(id);
             if (e != null && e.isValid() && tracked.remove(id) != null) e.remove();
         }, LIFETIME_TICKS);
+        return true;
     }
 
     // ------------------------------------------------------------ 目标与行为
