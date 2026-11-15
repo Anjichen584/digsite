@@ -1,10 +1,11 @@
 # 考古博物馆 · DigSite 遗址档位模板（B 部分加载）
 # size 必须为奇数（保证有中心格）；layers 为每格挖掘层数；
 # top-block 建议用 SUSPICIOUS_SAND / SUSPICIOUS_GRAVEL（原版可疑方块，刷子可交互）；
-# fill-block 为下层垫层（SAND/GRAVEL）；底座固定 STONE，柱顶上方自动清空 3 格。
+# fill-block 为下层垫层（SAND/GRAVEL/BLACKSTONE）；底座固定 STONE，柱顶上方自动清空 3 格。
 # 可选扩展键：
 #   shell-block   外圈壳层方块（D4 通用化）：建场时在格子柱边格外一圈包高度 = layers+2 的壳，
 #                 壳不属于格子层、不进保护索引，玩家可自由挖掉且不回滚。
+#                 magma 的 MAGMA_BLOCK 壳是「灼热壳」：原版站立灼伤即天然挑战，注意给玩家留落脚位。
 #   prefer-water  落点特性：随机落点时优先选周围 3 格含水的候选点（尝试 2 倍次数，找不到退回普通点）。
 tiers:
   pit:
@@ -44,3 +45,45 @@ tiers:
     top-block: SUSPICIOUS_SAND
     fill-block: SAND
     shell-block: PACKED_ICE
+  swamp:
+    display-name: 沼泽秘窖
+    description: 陷入泥沼的古窖藏，水汽氤氲、蛙声起伏，淤泥下封存着被遗忘的贡品。
+    size: 7
+    layers: 3
+    top-block: SUSPICIOUS_GRAVEL
+    fill-block: SAND
+    prefer-water: true
+  magma:
+    display-name: 火山遗层
+    description: 熔岩冷凝而成的黑曜地层，灼热壳步步烫脚，唯有耐得住高温者能捧出火中遗珍。
+    size: 9
+    layers: 4
+    top-block: SUSPICIOUS_GRAVEL
+    fill-block: BLACKSTONE
+    shell-block: MAGMA_BLOCK
+
+# H2 挖掘事件池（全局段，所有档位共用）：每层完成时按概率 roll 一次，不叠加、可无事件。
+# roll 顺序即此处的声明顺序，首个命中即触发。数值均为 [0,1] 概率。
+#   bonus-fragment 出土惊喜：本次掉落双倍碎片（额外掉一片随机缺位）
+#   sand-fall      落沙惊魂：头顶沙粒粒子 + 音效 + 掉 1 个沙子（纯氛围小奖）
+#   rust-fog       铜锈迷雾：BLINDNESS 5 秒（原版药水效果）
+#   lucky-strata   时来运转：本格下一层刷挖次数减半（内存标记，一次生效）
+events:
+  bonus-fragment: 0.08
+  sand-fall: 0.10
+  rust-fog: 0.06
+  lucky-strata: 0.05
+
+# H3 盗墓头目（palace/glacier 夜间盗墓贼事件的强化个体）：
+#   boss-chance     每轮刷出盗墓贼时，其中 1 只升级为头目的概率（PILLAGER，红名，max_health 强化）
+#   boss-max-health 头目最大生命值（原版属性 GENERIC→MAX_HEALTH，非 RPG）
+#   boss-enchants   头目掉落随机原版附魔书的附魔白名单（5 个，按 minecraft:id 解析，非法项忽略）
+guard:
+  boss-chance: 0.15
+  boss-max-health: 40
+  boss-enchants:
+    - sharpness
+    - protection
+    - efficiency
+    - unbreaking
+    - fortune

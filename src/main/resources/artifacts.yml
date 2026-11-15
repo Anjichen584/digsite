@@ -1,78 +1,158 @@
-# 文物目录 —— id 唯一，pieces 与碎片槽位数一致
+# 文物目录 —— id 唯一，pieces 与碎片槽位数一致（全部 ≥2 且 ≤8）
 # rarity: common | rare | epic | legendary
-# display: 展示用原版物品材质（成品文物以它为基础）
+# display: 展示用原版物品材质（成品文物以它为基础，必须是 1.21 真实存在的 Material）
 # weight: 修复/图鉴展示排序权重（大靠前），loot 权重走 rarity
+# series: 系列归属 —— dynasty 王朝礼器 / nature 自然史 / relic 异域奇珍 / daily 日常旧物（缺省 daily）
 artifacts:
-  - id: bone_flute
-    name: 骨笛
-    rarity: common
-    pieces: 4
-    display: BONE
-    weight: 40
-    lore:
-      - "<gray>远古部落的音律，吹响时风声呜咽。</gray>"
-  - id: clay_head
-    name: 陶俑首
-    rarity: common
-    pieces: 2
-    display: CLAY_BRICK
-    weight: 40
-    lore:
-      - "<gray>陶俑的头颅，眉眼间还留着匠人的指纹。</gray>"
-  - id: bamboo_slips
-    name: 竹简
-    rarity: common
-    pieces: 5
-    display: BAMBOO_MOSAIC
-    weight: 35
-    lore:
-      - "<gray>墨迹斑驳的简册，记着一场 forgotten 的旱灾。</gray>"
-  - id: jade_bi
-    name: 玉璧
-    rarity: rare
-    pieces: 3
-    display: LIME_STAINED_GLASS
-    weight: 30
-    lore:
-      - "<gray>苍璧礼天，边缘的谷纹细如发丝。</gray>"
-  - id: oracle_bone
-    name: 甲骨残片
-    rarity: rare
-    pieces: 4
-    display: BONE_BLOCK
-    weight: 28
-    lore:
-      - "<gray>灼裂的龟甲，卜辞问的是明年雨水。</gray>"
-  - id: seal_stamp
-    name: 玺印
-    rarity: rare
-    pieces: 3
-    display: GOLD_NUGGET
-    weight: 26
-    lore:
-      - "<gray>印钮是一头伏兽，印文无人能识。</gray>"
+  # ============ dynasty 王朝礼器（8 件） ============
   - id: bronze_jue
     name: 青铜爵
     rarity: epic
     pieces: 4
     display: COPPER_INGOT
-    weight: 20
+    weight: 22
+    series: dynasty
     lore:
       - "<gray>三足两柱，绿锈之下是三千年前的酒气。</gray>"
-  - id: tricolor_horse
-    name: 唐三彩马
+  - id: jade_bi
+    name: 玉璧
+    rarity: rare
+    pieces: 3
+    display: LIME_STAINED_GLASS
+    weight: 14
+    series: dynasty
+    lore:
+      - "<gray>苍璧礼天，边缘的谷纹细如发丝。</gray>"
+  - id: seal_stamp
+    name: 玺印
+    rarity: rare
+    pieces: 3
+    display: GOLD_NUGGET
+    weight: 11
+    series: dynasty
+    lore:
+      - "<gray>印钮是一头伏兽，印文无人能识。</gray>"
+  - id: bronze_ding
+    name: 青铜大鼎
+    rarity: legendary
+    pieces: 6
+    display: IRON_INGOT
+    weight: 30
+    series: dynasty
+    lore:
+      - "<gray>三足双耳，腹内铭文四十七字。</gray>"
+      - "<gray>铸鼎者说：子孙永宝用之。</gray>"
+  - id: chime_bells
+    name: 曾侯乙编钟
+    rarity: legendary
+    pieces: 7
+    display: GOLD_INGOT
+    weight: 28
+    series: dynasty
+    lore:
+      - "<gray>六十五枚青铜钟悬于钟架，一钟双音。</gray>"
+      - "<gray>敲响时，礼乐之邦在自己的耳中苏醒。</gray>"
+  - id: jade_cong
+    name: 玉琮
+    rarity: epic
+    pieces: 5
+    display: QUARTZ
+    weight: 17
+    series: dynasty
+    lore:
+      - "<gray>外方内圆，四角的兽面纹已经风化。</gray>"
+      - "<gray>先民相信：天圆地方的秩序握在手中。</gray>"
+  - id: jade_suit_piece
+    name: 金缕玉衣片
+    rarity: legendary
+    pieces: 8
+    display: PRISMARINE_SHARD
+    weight: 26
+    series: dynasty
+    lore:
+      - "<gray>一枚玉片，四角钻孔，金丝犹存。</gray>"
+      - "<gray>两千片玉曾缝成一具不朽的奢望。</gray>"
+  - id: tiger_tally
+    name: 错金铜虎符
+    rarity: epic
+    pieces: 5
+    display: COPPER_INGOT
+    weight: 16
+    series: dynasty
+    lore:
+      - "<gray>虎符一分为二，错金铭文「甲兵之符」。</gray>"
+      - "<gray>右在君，左在将——合之方可调兵。</gray>"
+
+  # ============ nature 自然史（6 件） ============
+  - id: mammoth_tooth
+    name: 巨兽臼齿
+    rarity: rare
+    pieces: 4
+    display: BONE
+    weight: 10
+    series: nature
+    lore:
+      - "<gray>磨盘般的臼齿，齿脊如揉皱的山脊。</gray>"
+      - "<gray>它曾咀嚼过的草原，如今是你的遗址。</gray>"
+  - id: trilobite
+    name: 三叶虫化石
+    rarity: rare
+    pieces: 3
+    display: COAL
+    weight: 9
+    series: nature
+    lore:
+      - "<gray>页岩翻开一页，三叶虫睡了五亿年。</gray>"
+      - "<gray>它比恐龙更古老，比任何王朝都漫长。</gray>"
+  - id: ammonite
+    name: 菊石化石
+    rarity: common
+    pieces: 4
+    display: PRISMARINE_SHARD
+    weight: 6
+    series: nature
+    lore:
+      - "<gray>螺旋的纹路一圈圈盘进石头。</gray>"
+      - "<gray>古人叫它蛇石，海把它变成了护身符。</gray>"
+  - id: amber
+    name: 琥珀
+    rarity: common
+    pieces: 2
+    display: HONEYCOMB
+    weight: 5
+    series: nature
+    lore:
+      - "<gray>树脂滴落的那一瞬被永久保存。</gray>"
+      - "<gray>对着光看，里面仿佛有一只振翅的小虫。</gray>"
+  - id: dino_vertebra
+    name: 恐龙脊椎
     rarity: epic
     pieces: 6
-    display: TERRACOTTA
-    weight: 16
+    display: BONE_BLOCK
+    weight: 15
+    series: nature
     lore:
-      - "<gray>釉色流淌的黄鬃骏马，鞍上还系着丝绦。</gray>"
+      - "<gray>一节脊椎大如磨盘，出土时仍保持弯曲。</gray>"
+      - "<gray>它倒下的姿态，成了一亿年的谜语。</gray>"
+  - id: archaeopteryx_bone
+    name: 始祖鸟翼骨
+    rarity: epic
+    pieces: 5
+    display: BONE
+    weight: 14
+    series: nature
+    lore:
+      - "<gray>细空的翼骨，介于爬行与飞翔之间。</gray>"
+      - "<gray>羽毛的印痕还在石上，像一次未完成的起飞。</gray>"
+
+  # ============ relic 异域奇珍（8 件） ============
   - id: blue_porcelain
     name: 青花瓷瓶
     rarity: epic
     pieces: 5
     display: LIGHT_BLUE_STAINED_GLASS
-    weight: 14
+    weight: 18
+    series: relic
     lore:
       - "<gray>缠枝莲纹绕瓶一周，口沿有一道旧锔钉。</gray>"
   - id: gilded_statue
@@ -80,9 +160,167 @@ artifacts:
     rarity: legendary
     pieces: 7
     display: GOLD_BLOCK
-    weight: 8
+    weight: 32
+    series: relic
     lore:
       - "<gray>金皮斑驳的造像，底座铭文指向一座未见的城。</gray>"
+  - id: persian_glass
+    name: 波斯琉璃盏
+    rarity: epic
+    pieces: 4
+    display: AMETHYST_SHARD
+    weight: 13
+    series: relic
+    lore:
+      - "<gray>盏壁泛着紫罗兰的光，是西域的配方。</gray>"
+      - "<gray>驼队把它捧过沙漠，比丝绸更怕颠簸。</gray>"
+  - id: roman_coin
+    name: 罗马金币
+    rarity: rare
+    pieces: 3
+    display: GOLD_NUGGET
+    weight: 8
+    series: relic
+    lore:
+      - "<gray>币面上的皇帝侧脸已被磨平一半。</gray>"
+      - "<gray>它怎么走到这里来？商队没有留下答案。</gray>"
+  - id: silk_scrap
+    name: 丝路残锦
+    rarity: rare
+    pieces: 5
+    display: CYAN_DYE
+    weight: 9
+    series: relic
+    lore:
+      - "<gray>靛青的经纬间织着半只联珠纹翼马。</gray>"
+      - "<gray>残幅不过一掌宽，颜色却千年未褪。</gray>"
+  - id: scarab_seal
+    name: 圣甲虫印
+    rarity: rare
+    pieces: 3
+    display: LAPIS_LAZULI
+    weight: 8
+    series: relic
+    lore:
+      - "<gray>青金石雕的甲虫，腹底刻着王名圈。</gray>"
+      - "<gray>尼罗河畔的太阳神，滚着昼夜推它东来。</gray>"
+  - id: glass_bead
+    name: 异域玻璃珠
+    rarity: common
+    pieces: 2
+    display: MAGENTA_STAINED_GLASS
+    weight: 5
+    series: relic
+    lore:
+      - "<gray>洋红缠丝的蜻蜓眼，一颗珠换一捆粟。</gray>"
+      - "<gray>它串在牧羊女的颈间，比金币更久远。</gray>"
+  - id: malachite_scepter
+    name: 孔雀石权杖
+    rarity: epic
+    pieces: 4
+    display: BLAZE_ROD
+    weight: 12
+    series: relic
+    lore:
+      - "<gray>翠纹盘绕如孔雀开屏，杖首镶着一环金。</gray>"
+      - "<gray>握过它的手都已化为尘土，绿光犹在。</gray>"
+
+  # ============ daily 日常旧物（10 件） ============
+  - id: bone_flute
+    name: 骨笛
+    rarity: common
+    pieces: 4
+    display: BONE
+    weight: 10
+    series: daily
+    lore:
+      - "<gray>远古部落的音律，吹响时风声呜咽。</gray>"
+  - id: clay_head
+    name: 陶俑首
+    rarity: common
+    pieces: 2
+    display: CLAY_BRICK
+    weight: 9
+    series: daily
+    lore:
+      - "<gray>陶俑的头颅，眉眼间还留着匠人的指纹。</gray>"
+  - id: bamboo_slips
+    name: 竹简
+    rarity: common
+    pieces: 5
+    display: BAMBOO_MOSAIC
+    weight: 9
+    series: daily
+    lore:
+      - "<gray>墨迹斑驳的简册，记着一场 forgotten 的旱灾。</gray>"
+  - id: oracle_bone
+    name: 甲骨残片
+    rarity: rare
+    pieces: 4
+    display: BONE_BLOCK
+    weight: 12
+    series: daily
+    lore:
+      - "<gray>灼裂的龟甲，卜辞问的是明年雨水。</gray>"
+  - id: tricolor_horse
+    name: 唐三彩马
+    rarity: epic
+    pieces: 6
+    display: TERRACOTTA
+    weight: 20
+    series: daily
+    lore:
+      - "<gray>釉色流淌的黄鬃骏马，鞍上还系着丝绦。</gray>"
+  - id: stone_axe
+    name: 磨制石斧
+    rarity: common
+    pieces: 3
+    display: COBBLED_DEEPSLATE
+    weight: 7
+    series: daily
+    lore:
+      - "<gray>刃口磨得温润，柄孔是砂绳磨了三天。</gray>"
+      - "<gray>它砍倒过第一片田边的树。</gray>"
+  - id: spinning_whorl
+    name: 陶纺轮
+    rarity: common
+    pieces: 2
+    display: CLAY_BALL
+    weight: 6
+    series: daily
+    lore:
+      - "<gray>圆饼中央一孔，旋转起来就是一缕线。</gray>"
+      - "<gray>半坡的姑娘用它纺完了整个冬天。</gray>"
+  - id: eave_tile
+    name: 汉瓦当
+    rarity: common
+    pieces: 3
+    display: TERRACOTTA
+    weight: 7
+    series: daily
+    lore:
+      - "<gray>「长乐未央」四字盘踞在圆瓦当上。</gray>"
+      - "<gray>屋檐一滴一滴的雨，都从它脸上流过。</gray>"
+  - id: bronze_mirror
+    name: 铜镜
+    rarity: rare
+    pieces: 4
+    display: IRON_INGOT
+    weight: 8
+    series: daily
+    lore:
+      - "<gray>镜背铸着「见日之光」，镜面已昏。</gray>"
+      - "<gray>磨镜人走街串巷，为它续了两百年的光。</gray>"
+  - id: oil_lamp
+    name: 老油灯
+    rarity: common
+    pieces: 3
+    display: LANTERN
+    weight: 6
+    series: daily
+    lore:
+      - "<gray>灯盏积着经年的油垢，芯捻早已炭化。</gray>"
+      - "<gray>有人曾在灯下写完最后一封信。</gray>"
 
 # 遗址档位 → rarity 掉落权重（SiteService 每层完成时 roll 用）
 site-tier-weights:
@@ -111,3 +349,13 @@ site-tier-weights:
     rare: 40
     epic: 32
     legendary: 8
+  swamp:      # 沼泽秘窖（H 轨新档位，按 F 理解预置，合体时与 H 报告对齐）
+    common: 45
+    rare: 40
+    epic: 15
+    legendary: 0
+  magma:      # 火山遗层（H 轨新档位，按 F 理解预置，合体时与 H 报告对齐）
+    common: 15
+    rare: 40
+    epic: 33
+    legendary: 12

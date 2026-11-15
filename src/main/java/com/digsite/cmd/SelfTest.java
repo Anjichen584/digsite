@@ -102,6 +102,7 @@ public final class SelfTest {
         runCommandSources();
         runModelMath();
         runStores();
+        runGuildCatalogBaseline();
         String head = "自检 " + (total - failed) + "/" + total + " 成功，失败 " + failed;
         output(sender, failed == 0 ? "<green>" + head + "</green>" : "<red>" + head + "</red>");
         for (String f : failures) output(sender, "<dark_red>[失败]</dark_red> " + f);
@@ -666,6 +667,25 @@ public final class SelfTest {
             AchieveStore reloaded = new AchieveStore(dir);
             eq(3L, reloaded.getCounter("visit:EX-K"), "visit 计数往返");
         });
+    }
+
+    private void runGuildCatalogBaseline() {
+        t("catalog.all() ≥30（依赖 F 轨 artifacts.yml 32 件落地）", () ->
+                a(plugin.catalog().all().size() >= 30, "实际 " + plugin.catalog().all().size()));
+        t("catalog 系列数 ≥4（依赖 F 轨 series 字段落盘）", () -> {
+            java.util.Set<String> series = new java.util.HashSet<>();
+            for (Model.ArtifactDef d : plugin.catalog().all()) series.add(d.series());
+            a(series.size() >= 4, "实际系列 " + series);
+        });
+        t("catalog 四系列均有藏品（dynasty/nature/relic/daily）", () -> {
+            java.util.Set<String> series = new java.util.HashSet<>();
+            for (Model.ArtifactDef d : plugin.catalog().all()) series.add(d.series());
+            for (String need : List.of("dynasty", "nature", "relic", "daily")) {
+                a(series.contains(need), "缺系列 " + need);
+            }
+        });
+        t("catalog 珍品池非空（rare 池供珍品委托口径）", () ->
+                a(!plugin.catalog().byRarity("rare").isEmpty(), "rare 池为空"));
     }
 
     private static void deleteRecursively(File f) {

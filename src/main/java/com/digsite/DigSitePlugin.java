@@ -6,6 +6,7 @@ import com.digsite.catalog.ArtifactCatalog;
 import com.digsite.codex.CodexService;
 import com.digsite.cmd.DigCommand;
 import com.digsite.cmd.SelfTest;
+import com.digsite.guild.GuildHook;
 import com.digsite.museum.MuseumService;
 import com.digsite.museum.VoteService;
 import com.digsite.restore.RestorationService;
@@ -45,6 +46,7 @@ public final class DigSitePlugin extends JavaPlugin {
     private CodexService codexService;
     private AchieveStore achieveStore;
     private AchieveService achieveService;
+    private GuildHook guildHook = GuildHook.NOOP; // 行会体系伪接口（v0.3.0 暂缓，预留扩展点）
     private MuseumService museumService;
     private VoteService voteService;
     private RestorationService restorationService;
@@ -74,6 +76,7 @@ public final class DigSitePlugin extends JavaPlugin {
         achieveStore = new AchieveStore(getDataFolder());
         achieveService = new AchieveService(this, achieveStore);
         achieveService.start();
+        // 轨道 G：考古行会 + 委托板（在 achieveService 之后初始化，判定依赖 PlayerStore/AchieveStore 只读）
         if (config0.raw().getBoolean("restore.kits-enabled", true)) {
             com.digsite.util.KitCodec.registerRecipes(this);
         }
@@ -181,6 +184,10 @@ public final class DigSitePlugin extends JavaPlugin {
 
     public AchieveService achieveService() {
         return achieveService;
+    }
+
+    public GuildHook guildHook() {
+        return guildHook;
     }
 
     public MuseumService museumService() {

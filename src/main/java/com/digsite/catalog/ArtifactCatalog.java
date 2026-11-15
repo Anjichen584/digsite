@@ -11,10 +11,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-/** 文物目录：加载 artifacts.yml；提供按遗址档位的稀有度加权 roll。 */
+/** 文物目录：加载 artifacts.yml；提供按遗址档位的稀有度加权 roll 与系列查询。 */
 public final class ArtifactCatalog {
     private final Map<String, Model.ArtifactDef> defs = new LinkedHashMap<>();
     private final Map<String, Map<String, Integer>> tierWeights = new LinkedHashMap<>();
+
+    /** 系列固定顺序与中文名（dynasty 王朝礼器 / nature 自然史 / relic 异域奇珍 / daily 日常旧物）。 */
+    private static final Map<String, String> SERIES_NAMES = new LinkedHashMap<>();
+    static {
+        SERIES_NAMES.put("dynasty", "王朝礼器");
+        SERIES_NAMES.put("nature", "自然史");
+        SERIES_NAMES.put("relic", "异域奇珍");
+        SERIES_NAMES.put("daily", "日常旧物");
+    }
 
     public ArtifactCatalog(File artifactsYml) {
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(artifactsYml);
@@ -38,7 +47,9 @@ public final class ArtifactCatalog {
                     pieces,
                     String.valueOf(gd(row, "display", "BRICK")),
                     lore,
-                    toInt(row.get("weight"), 0)));
+                    toInt(row.get("weight"), 0),
+                    // series 缺省 daily（旧配置兼容）
+                    String.valueOf(gd(row, "series", "daily"))));
         }
         ConfigurationSection tw = yml.getConfigurationSection("site-tier-weights");
         if (tw != null) {
@@ -64,6 +75,35 @@ public final class ArtifactCatalog {
         List<Model.ArtifactDef> out = new ArrayList<>();
         for (Model.ArtifactDef d : defs.values()) if (d.rarity().equalsIgnoreCase(rarity)) out.add(d);
         return out;
+    }
+
+    /** 按系列取文物（保持 yml 顺序；未知系列返回空表）。 */
+    public List<Model.ArtifactDef> bySeries(String series) {
+        List<Model.ArtifactDef> out = new ArrayList<>();
+        if (series == null) return out;
+        for (Model.ArtifactDef d : defs.values()) if (series.equalsIgnoreCase(d.series())) out.add(d);
+        return out;
+    }
+
+    /** 出现过至少一件文物的系列 id 集合（按 SERIES_NAMES 固定顺序，缺失的系列不出现）。 */
+    public java.util.Set<String> seriesNames() {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (String s : SERIES_NAMES.keySet()) {
+            for (Model.ArtifactDef d : defs.values()) {
+                if (s.equalsIgnoreCase(d.series())) { out.add(s); break; }
+            }
+        }
+        // 兜底：yml 里出现未知系列 id 也不丢
+        for (Model.ArtifactDef d : defs.values()) {
+            if (!SERIES_NAMES.containsKey(d.series())) out.add(d.series());
+        }
+        return out;
+    }
+
+    /** 系列 id → 中文名（未知系列原样返回）。供图鉴/博物馆展示用。 */
+    public static String seriesDisplayName(String series) {
+        if (series == null) return "日常旧物";
+        return SERIES_NAMES.getOrDefault(series.toLowerCase(java.util.Locale.ROOT), series);
     }
 
     /** 按遗址档位 roll 一件文物；无匹配权重时退回任意 common。 */

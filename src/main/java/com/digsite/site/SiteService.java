@@ -13,6 +13,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
@@ -23,9 +24,12 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -34,6 +38,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * 遗址生成与挖掘状态机（B 部分）。
@@ -75,6 +80,16 @@ public final class SiteService {
     private final SiteBossBar bossBar;
     /** D2：盗墓贼事件（palace/glacier 夜间骚扰）。 */
     private final SiteGuard guard;
+    /** H2：挖掘事件池（层完成时 roll，概率来自 sites.yml events 段）。 */
+    private final SiteEvents siteEvents;
+    /** H4：考古笔记 PDC 标记（com.digsite:site_note = 遗址 id）。 */
+    private final NamespacedKey noteKey;
+
+    /** H3：盗墓头目配置（sites.yml guard 段，loadTiers 同源加载；缺段用缺省）。 */
+    private SiteGuard.BossCfg guardCfg = new SiteGuard.BossCfg(0.15, 40,
+            List.of("sharpness", "protection", "efficiency", "unbreaking", "fortune"));
+    /** H2：事件概率表（sites.yml events 段原序；loadTiers 填充，构造 SiteEvents 时注入）。 */
+    private Map<String, Double> eventProbs = Map.of();
 
     public SiteService(DigSitePlugin plugin, SitesStore store, ArtifactCatalog catalog, ItemCodec codec,
                        CodexService codexService, PlayerStore playerStore, DigSiteConfig config) {
@@ -85,11 +100,13 @@ public final class SiteService {
         this.codexService = codexService;
         this.playerStore = playerStore;
         this.config = config;
+        this.noteKey = new NamespacedKey(plugin, "site_note");
         saveDefaultSites();
         loadTiers();
         rebuildIndex();
         this.bossBar = new SiteBossBar(plugin, this);
-        this.guard = new SiteGuard(plugin, this);
+        this.siteEvents = new SiteEvents(plugin, eventProbs);
+        this.guard = new SiteGuard(plugin, this, guardCfg);
         this.guard.start();
     }
 
@@ -133,6 +150,27 @@ public final class SiteService {
             tiers.put("palace", new Tier("palace", "宫殿基址", "规模宏大的四层殿基。", 9, 4,
                     Material.SUSPICIOUS_GRAVEL, Material.SAND, null, false));
             plugin.getLogger().warning("sites.yml 缺失或为空，已启用内置三档默认模板。");
+        }
+        // H2：事件概率（全局段，所有档位共用；按 yml 声明顺序保留，roll 时首个命中即触发）
+        Map<String, Double> ev = new LinkedHashMap<>();
+        ConfigurationSection es = yml.getConfigurationSection("events");
+        if (es != null) {
+            for (String k : es.getKeys(false)) {
+                ev.put(k, Math.max(0.0D, es.getDouble(k, 0.0D)));
+            }
+        }
+        this.eventProbs = ev;
+        // H3：盗墓头目配置（guard 段；缺段/缺项用上方字段初始化的缺省值兜底）
+        ConfigurationSection gs = yml.getConfigurationSection("guard");
+        if (gs != null) {
+            List<String> enchants = new ArrayList<>();
+            for (String s : gs.getStringList("boss-enchants")) {
+                if (s != null && !s.isBlank()) enchants.add(s.trim());
+            }
+            this.guardCfg = new SiteGuard.BossCfg(
+                    Math.max(0.0D, Math.min(1.0D, gs.getDouble("boss-chance", guardCfg.bossChance()))),
+                    Math.max(1, gs.getInt("boss-max-health", guardCfg.bossMaxHealth())),
+                    enchants.isEmpty() ? guardCfg.bossEnchants() : enchants);
         }
     }
 
@@ -369,8 +407,13 @@ public final class SiteService {
         lastBrushTick.put(cellKey, (long) nowTick);
         lastBrusher.put(site.id(), player.getName());
 
+        // H2 时来运转：本格若有待生效的 lucky 标记，则本层 hits 阈值减半（consume 即销毁，一次生效）
+        int need = Math.max(1, config.hitsPerLayer());
+        if (siteEvents.consumeLucky(cellKey)) {
+            need = Math.max(1, need / 2);
+        }
         int hitCount = hits.merge(cellKey, 1, Integer::sum);
-        if (hitCount >= Math.max(1, config.hitsPerLayer())) {
+        if (hitCount >= need) {
             hits.remove(cellKey);
             completeLayer(player, site, cell, integrity, true);
         } else {
@@ -423,7 +466,14 @@ public final class SiteService {
         boolean done = kNew <= 0;
         Model.SiteCell updated = new Model.SiteCell(cell.dx(), cell.dz(), kNew, integrity, done);
         store.updateCell(site.id(), updated);
-        if (rollDrop) rollDrop(player, site, w, top.getLocation(), integrity);
+        if (rollDrop) {
+            rollDrop(player, site, w, top.getLocation(), integrity);
+            // H2 挖掘事件池：与 roll 掉落同点触发（每层完成时 roll 一次，不叠加、可无事件）。
+            // extraDrop 通道只负责把物品落到层顶上方（与 rollDrop 落点口径一致），计数由事件自己负责。
+            Location dropAt = top.getLocation();
+            Consumer<ItemStack> extraDrop = item -> w.dropItemNaturally(dropAt.clone().add(0.5, 1.0, 0.5), item);
+            siteEvents.onLayerComplete(player, site, cell, extraDrop);
+        }
         if (done) {
             bossBar.update(site.id()); // D3：格子挖穿 → BossBar 进度刷新（handleBrush/handleAdminBreak 共用此点）
             maybeFinishSite(site);
@@ -465,8 +515,34 @@ public final class SiteService {
         guard.clearSite(site.id()); // D2：关场顺带清掉该遗址名下盗墓贼
         codexService.onSiteCleared(site.id(), site.tier(), name);
         playerStore.bumpSitesCleared(name);
+        dropSiteNote(site, name); // H4：考古笔记（WRITABLE_BOOK + PDC，掉在遗址中心）
         plugin.announcer().announceUrgent("<gold>遗址完整发掘！</gold> <white>「" + tierDisplay(site.tier())
                 + "」" + site.id() + "</white> <yellow>全部格子清理完毕，向 " + name + " 及考古队致敬！</yellow>");
+    }
+
+    /**
+     * H4 考古笔记：遗址完整发掘时，在遗址中心掉落一本「考古笔记」。
+     * WRITABLE_BOOK（原版可写书，右键即原生编辑行为，不做额外交互）+ PDC com.digsite:site_note = 遗址 id；
+     * Lore 记载：档位 / 编号 / 清剿者 / 日期 / 一句话氛围文案（取档位 description）。
+     */
+    private void dropSiteNote(Model.SiteInfo site, String clearer) {
+        World w = Bukkit.getWorld(site.worldName());
+        if (w == null) return;
+        Tier t = tiers.get(site.tier());
+        String flavor = (t == null || t.desc().isBlank()) ? "此处的地层已被完整翻开。" : t.desc();
+        ItemStack note = new ItemStack(Material.WRITABLE_BOOK);
+        var meta = note.getItemMeta();
+        meta.displayName(Msg.mm("<gold>考古笔记</gold> <gray>·</gray> <yellow>" + site.id() + "</yellow>"));
+        List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
+        lore.add(Msg.mm("<gray>遗址档位：</gray><white>" + tierDisplay(site.tier()) + "</white>"));
+        lore.add(Msg.mm("<gray>遗址编号：</gray><white>" + site.id() + "</white>"));
+        lore.add(Msg.mm("<gray>清剿者：</gray><white>" + clearer + "</white>"));
+        lore.add(Msg.mm("<gray>日期：</gray><white>" + new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + "</white>"));
+        lore.add(Msg.mm("<dark_gray>「" + flavor + "」</dark_gray>"));
+        meta.lore(lore);
+        meta.getPersistentDataContainer().set(noteKey, PersistentDataType.STRING, site.id());
+        note.setItemMeta(meta);
+        w.dropItemNaturally(new Location(w, site.cx() + 0.5, site.cy() + 1.0, site.cz() + 0.5), note);
     }
 
     // ---------------------------------------------------------------- 保护 / 查询
@@ -555,6 +631,7 @@ public final class SiteService {
         String prefix = siteId + ";";
         lastBrushTick.keySet().removeIf(k -> k.startsWith(prefix));
         hits.keySet().removeIf(k -> k.startsWith(prefix));
+        siteEvents.clearSite(siteId); // H2：顺手清掉该遗址名下的 lucky 标记
     }
 
     /** 重启恢复：从 store 现有 active 遗址重建方块索引，保证跨重启仍可挖。 */

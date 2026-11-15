@@ -190,20 +190,70 @@ public final class CodexService implements Listener {
             Model.ArtifactDef def = defs.get(start + i);
             Model.FirstRestoration fr = store.firstRestoration(def.id());
             if (fr != null) {
-                // 已首修：真实展示（成色按 100 展示，修复者写首修者）
-                inv.setItem(i, codec.artifact(
-                        new Model.ArtifactData(def.id(), 100, fr.restorerName(), fr.at()), def));
+                // 已首修：真实展示（成色按 100 展示，修复者写首修者），并追加系列信息 lore
+                ItemStack it = codec.artifact(
+                        new Model.ArtifactData(def.id(), 100, fr.restorerName(), fr.at()), def);
+                appendSeriesLore(it, def);
+                inv.setItem(i, it);
             } else {
                 inv.setItem(i, unknownItem(def));
             }
         }
         if (page > 0) inv.setItem(45, navItem(Material.ARROW, "<yellow>◀ 上一页</yellow>"));
         inv.setItem(49, navItem(Material.BOOK, "<white>第 " + (page + 1) + " / " + maxPage + " 页</white>"));
-        if (page < maxPage - 1) inv.setItem(53, navItem(Material.ARROW, "<yellow>下一页 ▶</yellow>"));
+        // 53 放「系列进度」信息书；仅当未来文物 >45 件出现下一页时，信息书让位到 52
+        if (page < maxPage - 1) {
+            inv.setItem(53, navItem(Material.ARROW, "<yellow>下一页 ▶</yellow>"));
+            inv.setItem(52, seriesBook());
+        } else {
+            inv.setItem(53, seriesBook());
+        }
         p.openInventory(inv);
     }
 
-    /** 未首修剪影：BARRIER + 「？？？」+ 稀有度色条。 */
+    /** 给成品文物追加两行系列 lore：系列名 + 该系列已首修 x/y。 */
+    private void appendSeriesLore(ItemStack it, Model.ArtifactDef def) {
+        var meta = it.getItemMeta();
+        List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
+        List<net.kyori.adventure.text.Component> existing = meta.lore(); // Paper 组件版 getter
+        if (existing != null) lore.addAll(existing);
+        lore.add(Msg.mm("<dark_aqua>系列：" + ArtifactCatalog.seriesDisplayName(def.series()) + "</dark_aqua>"));
+        int[] xy = seriesProgress(def.series());
+        lore.add(Msg.mm("<gray>该系列已首修 </gray><white>" + xy[0] + "</white><gray>/</gray><white>"
+                + xy[1] + "</white><gray> 件</gray>"));
+        meta.lore(lore);
+        it.setItemMeta(meta);
+    }
+
+    /** 系列进度：该系列已全服首修件数 / 系列总件数。 */
+    private int[] seriesProgress(String series) {
+        List<Model.ArtifactDef> list = catalog.bySeries(series);
+        int done = 0;
+        for (Model.ArtifactDef d : list) {
+            if (store.firstRestoration(d.id()) != null) done++;
+        }
+        return new int[]{done, list.size()};
+    }
+
+    /** 「系列进度」信息书：列出四个系列各自的已首修 / 总数。 */
+    private ItemStack seriesBook() {
+        ItemStack it = new ItemStack(Material.KNOWLEDGE_BOOK);
+        var meta = it.getItemMeta();
+        meta.displayName(Msg.mm("<aqua>系列进度</aqua> <gray>（全服首修）</gray>"));
+        List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
+        for (String s : catalog.seriesNames()) {
+            int[] xy = seriesProgress(s);
+            lore.add(Msg.mm("<dark_aqua>" + ArtifactCatalog.seriesDisplayName(s)
+                    + "</dark_aqua><gray>：已首修 </gray><white>" + xy[0]
+                    + "</white><gray>/</gray><white>" + xy[1] + "</white><gray> 件</gray>"));
+        }
+        lore.add(Msg.mm("<dark_gray>集齐一个系列的首修，是每位考古学家的荣誉。</dark_gray>"));
+        meta.lore(lore);
+        it.setItemMeta(meta);
+        return it;
+    }
+
+    /** 未首修剪影：BARRIER + 「？？？」+ 稀有度色条 + 所属系列（系列名可见，藏品内容保密）。 */
     private ItemStack unknownItem(Model.ArtifactDef def) {
         ItemStack it = new ItemStack(Material.BARRIER);
         var meta = it.getItemMeta();
@@ -211,6 +261,7 @@ public final class CodexService implements Listener {
         List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
         String rarity = def.rarity() == null ? "common" : def.rarity().toLowerCase(Locale.ROOT);
         lore.add(Msg.mm(rarityColor(rarity) + "稀有度：" + rarity + "</color>"));
+        lore.add(Msg.mm("<dark_aqua>系列：" + ArtifactCatalog.seriesDisplayName(def.series()) + "</dark_aqua>"));
         lore.add(Msg.mm("<dark_gray>尚未有修复者留名，等待第一位考古学家。</dark_gray>"));
         meta.lore(lore);
         it.setItemMeta(meta);

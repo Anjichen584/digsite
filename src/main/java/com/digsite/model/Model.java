@@ -6,9 +6,21 @@ import java.util.List;
 public final class Model {
     private Model() {}
 
-    /** 文物定义（artifacts.yml）。 */
+    /**
+     * 文物定义（artifacts.yml）。
+     *
+     * <p>series 为系列标识（F 轨新增，追加在末尾，只增不改既有字段顺序）：
+     * dynasty 王朝礼器 / nature 自然史 / relic 异域奇珍 / daily 日常旧物；
+     * artifacts.yml 缺省时按 daily 处理。
+     */
     public record ArtifactDef(String id, String name, String rarity, int pieces,
-                              String displayMaterial, List<String> lore, int weight) {}
+                              String displayMaterial, List<String> lore, int weight, String series) {
+        /** 7 参兼容构造器（series 缺省 daily），保证既有调用点（如 SelfTest）无需改动即可编译。 */
+        public ArtifactDef(String id, String name, String rarity, int pieces,
+                           String displayMaterial, List<String> lore, int weight) {
+            this(id, name, rarity, pieces, displayMaterial, lore, weight, "daily");
+        }
+    }
 
     /** 碎片（挖掘产出，ItemCodec 编码进 ItemStack PDC）。 */
     public record FragmentData(String artifactId, int piece, int integrity, String siteId) {}
